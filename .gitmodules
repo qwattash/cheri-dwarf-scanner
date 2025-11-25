@@ -1,0 +1,3 @@
+[submodule "third-party/cheri-compressed-cap"]
+	path = third-party/cheri-compressed-cap
+	url = https://github.com/CTSRD-CHERI/cheri-compressed-cap.git
