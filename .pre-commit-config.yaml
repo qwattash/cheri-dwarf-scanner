@@ -1,0 +1,11 @@
+default_install_hook_types: [pre-commit]
+repos:
+  - repo: local
+    hooks:
+      - id: git-clang-format
+        name: git-clang-format
+        description: Run git-clang-format on the staged patch
+        entry: git clang-format
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
