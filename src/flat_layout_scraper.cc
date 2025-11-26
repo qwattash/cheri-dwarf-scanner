@@ -29,7 +29,6 @@
 #include <cassert>
 
 #include "flat_layout_scraper.hh"
-#include "log.hh"
 
 namespace fs = std::filesystem;
 namespace dwarf = llvm::dwarf;
