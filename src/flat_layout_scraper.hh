@@ -50,7 +50,8 @@ struct LayoutMember {
   LayoutMember()
       : byte_size(0), bit_size(0), byte_offset(0), bit_offset(0),
         is_pointer(false), is_function(false), is_anon(false), is_union(false),
-        is_imprecise(false), base(0), top(0), required_precision(0) {}
+        is_imprecise(false), is_vla(false), base(0), top(0),
+        required_precision(0) {}
 
   // Qualified flattened member name using :: as separator
   std::string name;
@@ -73,6 +74,7 @@ struct LayoutMember {
   bool is_anon : 1;
   bool is_union : 1;
   bool is_imprecise : 1;
+  bool is_vla : 1;
   // Capability base for this sub-object
   uint64_t base;
   // Capability top for this sub-object
@@ -96,7 +98,7 @@ struct LayoutHash {
  * In-memory representation of a flattened structure layout
  */
 struct FlattenedLayout {
-  FlattenedLayout() : line(0), size(0), die_offset(0) {}
+  FlattenedLayout() : line(0), size(0), die_offset(0), has_vla(false) {}
   FlattenedLayout(const TypeDesc &desc);
   LayoutId id() const { return std::make_tuple(file, line); }
 
@@ -116,6 +118,8 @@ struct FlattenedLayout {
   // Members as part of the flattened layout
   // Direct member information
   std::vector<LayoutMember> members;
+  // Does the layout include a VLA?
+  bool has_vla;
 };
 
 /**
@@ -214,8 +218,14 @@ protected:
   /**
    * Visit a structure/union/class member DIE
    */
-  void visitNested(const llvm::DWARFDie &die, FlattenedLayout *layout,
-                   std::string prefix, long mindex, unsigned long offset);
+  LayoutMember *visitNested(const llvm::DWARFDie &die, FlattenedLayout *layout,
+                            std::string prefix, long mindex,
+                            unsigned long offset);
+
+  /**
+   * Check whether the given member is a VLA and mark the layout accordingly.
+   */
+  void checkVLAMember(FlattenedLayout *layout, LayoutMember *member);
 
   /**
    * Insert a flattened layout into the database.

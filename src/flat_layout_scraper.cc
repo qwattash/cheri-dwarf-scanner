@@ -102,6 +102,9 @@ void FlatLayoutScraper::initSchema() {
             // Whether the type is a struct, union or not
             "is_union INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_union >= 0 AND is_union <= 1),"
+            // Does the structure contain a VLA
+            "has_vla INTEGER DEFAULT 0 NOT NULL"
+            " CHECK(has_vla >= 0 AND has_vla <= 1),"
             "UNIQUE(name, file, line, size))");
 
   sm_.query("CREATE TABLE IF NOT EXISTS layout_member ("
@@ -129,6 +132,8 @@ void FlatLayoutScraper::initSchema() {
             " CHECK(is_union >= 0 AND is_union <= 1),"
             "is_imprecise INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_imprecise >= 0 AND is_imprecise <= 1),"
+            "is_vla INTEGER DEFAULT 0 NOT NULL"
+            " CHECK(is_vla >= 0 AND is_vla <= 1),"
             "FOREIGN KEY (owner) REFERENCES type_layout (id),"
             "UNIQUE(owner, name, byte_offset, bit_offset))");
   // clang-format on
@@ -429,6 +434,8 @@ FlatLayoutScraper::visitCommon(const llvm::DWARFDie &die,
     return std::nullopt;
   }
 
+  bool is_union = die.getTag() == dwarf::DW_TAG_union_type;
+
   // Fail if we find a specification, this is not supported.
   // XXX do I need to findRecursively()?
   if (die.find(dwarf::DW_AT_specification)) {
@@ -452,18 +459,24 @@ FlatLayoutScraper::visitCommon(const llvm::DWARFDie &die,
   auto layout = std::make_unique<FlattenedLayout>(td);
   if (auto search = layouts_.find(layout->id()); search != layouts_.end()) {
     // We already have the structure, no need to scan it.
-    qDebug() << "Structure" << layout->name << "already present" << layout->file
-             << layout->line;
+    qDebug() << "Structure " << layout->name << " already scanned "
+             << layout->file << layout->line;
     return std::nullopt;
   }
 
   // Flatten the description of the type we found.
   long member_index = 0;
+  LayoutMember *last_member = nullptr;
   for (auto &child : die.children()) {
     if (child.getTag() == dwarf::DW_TAG_member) {
-      visitNested(child, layout.get(), td.name, member_index++, /*offset=*/0);
+      last_member = visitNested(child, layout.get(), td.name, member_index++,
+                                /*offset=*/0);
+      if (is_union)
+        checkVLAMember(layout.get(), last_member);
     }
   }
+  if (!is_union)
+    checkVLAMember(layout.get(), last_member);
 
   auto [pos, inserted] =
       layouts_.emplace(std::make_pair(layout->id(), std::move(layout)));
@@ -476,12 +489,13 @@ FlatLayoutScraper::visitCommon(const llvm::DWARFDie &die,
  * Recursively scan through a structure member and attach member
  * data to the layout.
  */
-void FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
-                                    FlattenedLayout *layout, std::string prefix,
-                                    long mindex, unsigned long parent_offset) {
+LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
+                                             FlattenedLayout *layout,
+                                             std::string prefix, long mindex,
+                                             unsigned long parent_offset) {
   /* Skip declarations, we don't care. */
   if (die.find(dwarf::DW_AT_declaration)) {
-    return;
+    return nullptr;
   }
 
   if (die.find(dwarf::DW_AT_specification)) {
@@ -560,26 +574,44 @@ void FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
                           m.byte_offset, m.bit_offset, m.type_name, m.name,
                           rlen, m.base, m.top, m.is_imprecise ? "I" : "P");
 
+  LayoutMember &mref = layout->members.emplace_back(std::move(m));
   if (member_desc.decl) {
     auto decl = *member_desc.decl;
     if (decl.kind == DeclKind::Union) {
-      m.is_union = true;
+      mref.is_union = true;
     }
-    // set is_anon
-    layout->members.push_back(m);
 
     if (decl.kind != DeclKind::Enum) {
       // Descend into the member
       long member_index = 0;
+      LayoutMember *last_member = nullptr;
       prefix += "::" + member_name;
       for (auto &child : decl.type_die.children()) {
         if (child.getTag() == dwarf::DW_TAG_member) {
-          visitNested(child, layout, prefix, member_index++, m.byte_offset);
+          last_member = visitNested(child, layout, prefix, member_index++,
+                                    mref.byte_offset);
+          if (mref.is_union)
+            checkVLAMember(layout, last_member);
         }
       }
+      if (!mref.is_union)
+        checkVLAMember(layout, last_member);
     }
-  } else {
-    layout->members.push_back(m);
+  }
+
+  return &mref;
+}
+
+void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
+                                       LayoutMember *member) {
+  if (member == nullptr)
+    return;
+
+  if (member->array_items && *member->array_items <= 1) {
+    member->is_vla = true;
+    layout->has_vla = true;
+    qDebug() << "Mark VLA member"
+             << std::format("{:#x} {}", member->byte_offset, member->name);
   }
 }
 
@@ -589,8 +621,8 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
 
     // clang-format off
     auto insert_layout = sm.prepare(
-        "INSERT INTO type_layout (name, file, line, size, is_union) "
-        "VALUES (:name, :file, :line, :size, :is_union) "
+        "INSERT INTO type_layout (name, file, line, size, is_union, has_vla) "
+        "VALUES (:name, :file, :line, :size, :is_union, :has_vla) "
         "ON CONFLICT DO NOTHING RETURNING id");
 
     auto fetch_layout = sm.prepare(
@@ -602,12 +634,12 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         "owner, name, type_name, byte_offset, bit_offset, "
         "byte_size, bit_size, array_items, "
         "base, top, required_precision, "
-        "is_pointer, is_function, is_anon, is_union, is_imprecise "
+        "is_pointer, is_function, is_anon, is_union, is_imprecise, is_vla"
         ") VALUES ("
         ":owner, :name, :type_name, :byte_offset, :bit_offset, "
         ":byte_size, :bit_size, :array_items, "
         ":base, :top, :required_precision, "
-        ":is_pointer, :is_function, :is_anon, :is_union, :is_imprecise"
+        ":is_pointer, :is_function, :is_anon, :is_union, :is_imprecise, :is_vla"
         ") ON CONFLICT DO NOTHING RETURNING id");
     // clang-format on
 
@@ -620,6 +652,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
     } else {
       insert_layout.bindValue(":is_union", 0ULL);
     }
+    insert_layout.bindValue(":has_vla", layout->has_vla);
     if (!insert_layout.exec()) {
       // Failed, abort the transaction
       qCritical() << "Failed to insert layout:" << insert_layout.lastQuery();
@@ -669,6 +702,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
       insert_member.bindValue(":is_anon", m.is_anon);
       insert_member.bindValue(":is_union", m.is_union);
       insert_member.bindValue(":is_imprecise", m.is_imprecise);
+      insert_member.bindValue(":is_vla", m.is_vla);
       if (!insert_member.exec()) {
         // Failed, abort the transaction
         qCritical() << "Failed to insert layout member:"
