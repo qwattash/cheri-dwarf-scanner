@@ -13,6 +13,8 @@ endif ()
 
 set(CMAKE_PREFIX_PATH "${CHERISDK}/sdk")
 
+enable_testing()
+
 include_directories(src)
 
 add_subdirectory(src)
