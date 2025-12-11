@@ -111,6 +111,7 @@ void FlatLayoutScraper::initSchema() {
             "base INTEGER,"
             "top INTEGER,"
             "required_precision INTEGER,"
+            "max_vla_size INTEGER,"
             "is_pointer INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_pointer >= 0 AND is_pointer <= 1),"
             "is_function INTEGER DEFAULT 0 NOT NULL"
@@ -121,8 +122,6 @@ void FlatLayoutScraper::initSchema() {
             " CHECK(is_union >= 0 AND is_union <= 1),"
             "is_imprecise INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_imprecise >= 0 AND is_imprecise <= 1),"
-            "is_vla INTEGER DEFAULT 0 NOT NULL"
-            " CHECK(is_vla >= 0 AND is_vla <= 1),"
             "FOREIGN KEY (owner) REFERENCES type_layout (id),"
             "UNIQUE(owner, name, byte_offset, bit_offset))");
   // clang-format on
@@ -425,10 +424,12 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
     return;
 
   if (member->array_items && member->array_items.value() <= 1) {
-    member->is_vla = true;
+    member->max_vla_size =
+        source().findMaxRepresentableLength(member->byte_offset);
     layout->has_vla = true;
     qDebug() << "Mark VLA member"
-             << std::format("{:#x} {}", member->byte_offset, member->name);
+             << std::format("{:#x} {} max size {:#x}", member->byte_offset,
+                            member->name, *member->max_vla_size);
   }
 }
 
@@ -450,13 +451,13 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         "INSERT INTO layout_member ("
         "owner, name, type_name, byte_offset, bit_offset, "
         "byte_size, bit_size, array_items, "
-        "base, top, required_precision, "
-        "is_pointer, is_function, is_anon, is_union, is_imprecise, is_vla"
+        "base, top, required_precision, max_vla_size, "
+        "is_pointer, is_function, is_anon, is_union"
         ") VALUES ("
         ":owner, :name, :type_name, :byte_offset, :bit_offset, "
         ":byte_size, :bit_size, :array_items, "
-        ":base, :top, :required_precision, "
-        ":is_pointer, :is_function, :is_anon, :is_union, :is_imprecise, :is_vla"
+        ":base, :top, :required_precision, :max_vla_size, "
+        ":is_pointer, :is_function, :is_anon, :is_union"
         ") ON CONFLICT DO NOTHING RETURNING id");
     // clang-format on
 
@@ -515,12 +516,15 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
                               static_cast<unsigned long long>(m->base));
       insert_member.bindValue(":top", static_cast<unsigned long long>(m->top));
       insert_member.bindValue(":required_precision", m->required_precision);
+      if (m->max_vla_size) {
+        insert_member.bindValue(":max_vla_size", *m->max_vla_size);
+      } else {
+        insert_member.bindValue(":max_vla_size", QVariant::fromValue(nullptr));
+      }
       insert_member.bindValue(":is_pointer", m->is_pointer);
       insert_member.bindValue(":is_function", m->is_function);
       insert_member.bindValue(":is_anon", m->is_anon);
       insert_member.bindValue(":is_union", m->is_union);
-      insert_member.bindValue(":is_imprecise", m->is_imprecise);
-      insert_member.bindValue(":is_vla", m->is_vla);
       if (!insert_member.exec()) {
         // Failed, abort the transaction
         qCritical() << "Failed to insert layout member:"

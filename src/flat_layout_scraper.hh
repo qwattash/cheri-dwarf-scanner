@@ -47,8 +47,7 @@ struct LayoutMember {
   LayoutMember()
       : byte_size(0), bit_size(0), byte_offset(0), bit_offset(0),
         is_pointer(false), is_function(false), is_anon(false), is_union(false),
-        is_imprecise(false), is_vla(false), base(0), top(0),
-        required_precision(0) {}
+        is_imprecise(false), base(0), top(0), required_precision(0) {}
 
   // Qualified flattened member name using :: as separator
   std::string name;
@@ -71,13 +70,14 @@ struct LayoutMember {
   bool is_anon : 1;
   bool is_union : 1;
   bool is_imprecise : 1;
-  bool is_vla : 1;
   // Capability base for this sub-object
   uint64_t base;
   // Capability top for this sub-object
   uint64_t top;
   // Number of precision bits required to represent this field exactly
   short required_precision;
+  // If this member is a VLA, the maximum size given the current alignment.
+  std::optional<unsigned long long> max_vla_size;
 };
 
 using LayoutId = std::tuple<std::string, size_t>;

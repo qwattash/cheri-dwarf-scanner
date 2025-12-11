@@ -46,10 +46,11 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_vla::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_vla::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
   }
 
   {
@@ -59,10 +60,11 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size0_vla::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size0_vla::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
   }
 
   {
@@ -72,15 +74,16 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size1_vla::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size1_vla::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
   }
 
   {
-    auto q_count = sm_->query(
-        "SELECT COUNT(*) as row_count FROM layout_member WHERE is_vla = 1");
+    auto q_count = sm_->query("SELECT COUNT(*) as row_count FROM layout_member "
+                              "WHERE max_vla_size IS NOT NULL");
     EXPECT_FALSE(q_count.lastError().isValid());
     EXPECT_TRUE(q_count.seek(0));
     EXPECT_EQ(q_count.value("row_count"), 3);
@@ -101,10 +104,12 @@ TEST_F(TestStorage, TestExtractNestedVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "nested_with_vla::inner::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "nested_with_vla::inner::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    // Aligned to 0x8
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0x1ff8);
   }
 
   {
@@ -113,7 +118,7 @@ TEST_F(TestStorage, TestExtractNestedVLA) {
     EXPECT_FALSE(q_vla.lastError().isValid());
     EXPECT_EQ(selectedRows(q_vla), 1);
     EXPECT_TRUE(q_vla.seek(0));
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
   }
 
   {
@@ -149,10 +154,11 @@ TEST_F(TestStorage, TestExtractUnionVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 1ULL << 63);
   }
 
   {
@@ -162,10 +168,11 @@ TEST_F(TestStorage, TestExtractUnionVLA) {
     EXPECT_EQ(selectedRows(q_vla), 2);
     EXPECT_TRUE(q_vla.seek(0));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla_mix::value");
-    EXPECT_FALSE(q_vla.value("is_vla").toBool());
+    EXPECT_TRUE(q_vla.value("max_vla_size").isNull());
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla_mix::vla");
-    EXPECT_TRUE(q_vla.value("is_vla").toBool());
+    EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
+    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 1ULL << 63);
   }
 
   {

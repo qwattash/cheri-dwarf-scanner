@@ -205,6 +205,7 @@ public:
    * Place it here because it may be arch-specific.
    */
   short findRequiredPrecision(uint64_t base, uint64_t length) const;
+  uint64_t findMaxRepresentableLength(uint64_t length) const;
 
 private:
   std::filesystem::path path_;

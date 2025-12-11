@@ -96,12 +96,17 @@ std::optional<uint64_t> GlobalSymScraper::getGlobalAddr(llvm::DWARFDie &die) {
   // We match the exact expression DW_OP_addr(x) [DW_OP_plus_uconst]
   uint64_t global_addr;
 
+  if (!die.find(dwarf::DW_AT_location)) {
+    // Nothing to do
+    return std::nullopt;
+  }
+
   auto loc_vec = die.getLocations(dwarf::DW_AT_location);
-  if (!loc_vec) {
-    llvm::consumeError(loc_vec.takeError());
-    qCritical() << "Can not extract DW_AT_location data for DIE"
-                << die.getOffset() << "in" << current_unit_;
-    throw ScraperError("Unexpected DW_TAG_variable DIE");
+  if (auto err = loc_vec.takeError()) {
+    qCritical() << std::format(
+        "Can not extract DW_AT_location data for DIE {:#x} in {}",
+        die.getOffset(), current_unit_);
+    throw ScraperError(llvm::toString(std::move(err)));
   }
   auto &unit = *die.getDwarfUnit();
   auto addr_size = unit.getAddressByteSize();

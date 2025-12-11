@@ -30,6 +30,8 @@
 #include <gtest/gtest.h>
 #include <memory>
 
+#include "flat_layout_scraper.hh"
+
 namespace cheri {
 
 // Common in-memory storage initialization

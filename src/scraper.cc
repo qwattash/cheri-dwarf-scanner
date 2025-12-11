@@ -25,6 +25,7 @@
  * SUCH DAMAGE.
  */
 
+#include <bit>
 #include <cassert>
 #include <format>
 #include <limits>
@@ -55,6 +56,7 @@ template <typename CC> struct CapTraits {};
 template <> struct CapTraits<CompressedCap128m> {
   using CapType = typename CompressedCap128m::cap_t;
   using AddrType = typename CompressedCap128m::addr_t;
+  static constexpr uint16_t MANTISSA_WIDTH = CC128M_MANTISSA_WIDTH;
   static CapType &SetAddr(CapType &cap, AddrType cursor) {
     cc128m_set_addr(&cap, cursor);
     return cap;
@@ -64,6 +66,7 @@ template <> struct CapTraits<CompressedCap128m> {
 template <> struct CapTraits<CompressedCap128> {
   using CapType = typename CompressedCap128::cap_t;
   using AddrType = typename CompressedCap128::addr_t;
+  static constexpr uint16_t MANTISSA_WIDTH = CC128_MANTISSA_WIDTH;
   static CapType &SetAddr(CapType &cap, AddrType cursor) {
     cc128_set_addr(&cap, cursor);
     return cap;
@@ -73,6 +76,7 @@ template <> struct CapTraits<CompressedCap128> {
 template <> struct CapTraits<CompressedCap64> {
   using CapType = typename CompressedCap64::cap_t;
   using AddrType = typename CompressedCap64::addr_t;
+  static constexpr uint16_t MANTISSA_WIDTH = CC64_MANTISSA_WIDTH;
   static CapType &SetAddr(CapType &cap, AddrType cursor) {
     cc64_set_addr(&cap, cursor);
     return cap;
@@ -98,6 +102,36 @@ std::pair<uint64_t, uint64_t> findRepresentableRangeImpl(uint64_t base,
 
 template <typename CC> uint64_t findRepresentableAlignImpl(uint64_t length) {
   return CC::representable_mask(length);
+}
+
+template <typename CC> uint64_t findMaxRepresentableLengthImpl(uint64_t base) {
+  /*
+   * A length becomes (possibly) not representable when L >= 2^{MW - 2}.
+   * When this is true, it is encoded with I_e = 1, E=0, which means that the
+   * alignment requirement is 2^{E + 3}.
+   * As the base alignment A grows, we compute the corresponding exponent as:
+   * A = 2^{E + 3} => E = log2(A) - 3.
+   * The precision of a capability depends on the MW. The top T is encoded
+   * with MW - 2 bits (2 bits are recovered implicitly). When I_e = 1, we lose
+   * an extra 3 bits from T, to encode the exponent (e.g. MW=14 encodes bits
+   * T[11:3] in the capability, so uses 12 - 3 = 9 bits).
+   * This means that we have MW - 5 bits to encode the Top.
+   * The E is computed such that the bit L_msb aligns with T[12], so the length
+   * has one extra bit, briging it to MW - 4.
+   * We compute the length mask M = 2^{MW - 4} - 1 (e.g. 0x3ff with MW=14).
+   * Finally, the maximum length is L = M * 2^{E + 3}.
+   */
+  if (base == 0) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+  uint8_t log2_alignment = std::countr_zero(base);
+  if (log2_alignment < 3) {
+    return (1ULL << (CapTraits<CC>::MANTISSA_WIDTH - 2)) - 1;
+  }
+  uint8_t exp = log2_alignment - 3;
+  uint64_t length_mask = (1ULL << (CapTraits<CC>::MANTISSA_WIDTH - 4)) - 1;
+
+  return length_mask << (exp + 3);
 }
 
 } // namespace
@@ -256,6 +290,22 @@ short DwarfSource::findRequiredPrecision(uint64_t base, uint64_t length) const {
     exp = std::min(__builtin_ffsll(base), __builtin_ffsll(top));
   }
   return len_msb - exp + 1;
+}
+
+uint64_t DwarfSource::findMaxRepresentableLength(uint64_t base) const {
+  auto *obj = dictx_->getDWARFObj().getFile();
+  assert(obj != nullptr && "Invalid DWARF source");
+  auto triple = obj->makeTriple();
+
+  if (triple.getArch() == llvm::Triple::aarch64) {
+    return findMaxRepresentableLengthImpl<CompressedCap128m>(base);
+  } else if (triple.getArch() == llvm::Triple::riscv64) {
+    return findMaxRepresentableLengthImpl<CompressedCap128>(base);
+  } else if (triple.getArch() == llvm::Triple::riscv32) {
+    return findMaxRepresentableLengthImpl<CompressedCap64>(base);
+  }
+
+  throw std::runtime_error("Unsupported architecture");
 }
 
 DwarfScraper::DwarfScraper(StorageManager &sm,

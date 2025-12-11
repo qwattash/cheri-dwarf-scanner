@@ -25,32 +25,42 @@
  * SUCH DAMAGE.
  */
 
-#include <cassert>
-#include <cstdlib>
 #include <filesystem>
-#include <gtest/gtest.h>
 
+#include "fixture.hh"
 #include "scraper.hh"
 
-namespace fs = std::filesystem;
+using namespace cheri;
 
-fs::path GetAssetPath(std::string_view v) {
-  const char *env_value = std::getenv("ASSET_DIR");
-  assert(env_value != nullptr && "Must specify ASSET_DIR env var");
-  fs::path base(env_value);
-  return base.append(v);
-}
-
-TEST(ComputePrecision, Subobject) {
-  cheri::DwarfSource dwsrc(
-      GetAssetPath("riscv_purecap_test_unrepresentable_subobject"));
+TEST(CompressedCap, RequiredPrecision) {
+  // Note: this selects the architecture
+  std::filesystem::path src("assets/sample_struct_vla");
+  cheri::DwarfSource dwsrc(src);
 
   auto Check = [&dwsrc](uint64_t base, uint64_t top) {
-    return dwsrc.FindRequiredPrecision(base, top - base);
+    return dwsrc.findRequiredPrecision(base, top - base);
   };
 
   ASSERT_EQ(Check(0x00000000, 0x00100000), 1);
   ASSERT_EQ(Check(0x00000004, 0x00001004), 11);
   ASSERT_EQ(Check(0x0FFFFFFF, 0x10000000), 1);
   ASSERT_EQ(Check(0x00000FFF, 0x00002001), 13);
+}
+
+TEST(CompressedCap, MaxRepresentableLength) {
+  // Note: this selects the architecture
+  std::filesystem::path src("assets/sample_struct_vla");
+  cheri::DwarfSource dwsrc(src);
+  uint64_t max_len;
+
+  max_len = dwsrc.findMaxRepresentableLength(0xf1);
+  ASSERT_EQ(max_len, 0xfff);
+  max_len = dwsrc.findMaxRepresentableLength(0xf2);
+  ASSERT_EQ(max_len, 0xfff);
+  max_len = dwsrc.findMaxRepresentableLength(0xf4);
+  ASSERT_EQ(max_len, 0xfff);
+  max_len = dwsrc.findMaxRepresentableLength(0xf8);
+  ASSERT_EQ(max_len, 0x1ff8);
+  max_len = dwsrc.findMaxRepresentableLength(0xf0);
+  ASSERT_EQ(max_len, 0x3ff0);
 }
