@@ -452,12 +452,12 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         "owner, name, type_name, byte_offset, bit_offset, "
         "byte_size, bit_size, array_items, "
         "base, top, required_precision, max_vla_size, "
-        "is_pointer, is_function, is_anon, is_union"
+        "is_pointer, is_function, is_anon, is_union, is_imprecise"
         ") VALUES ("
         ":owner, :name, :type_name, :byte_offset, :bit_offset, "
         ":byte_size, :bit_size, :array_items, "
         ":base, :top, :required_precision, :max_vla_size, "
-        ":is_pointer, :is_function, :is_anon, :is_union"
+        ":is_pointer, :is_function, :is_anon, :is_union, :is_imprecise"
         ") ON CONFLICT DO NOTHING RETURNING id");
     // clang-format on
 
@@ -525,6 +525,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
       insert_member.bindValue(":is_function", m->is_function);
       insert_member.bindValue(":is_anon", m->is_anon);
       insert_member.bindValue(":is_union", m->is_union);
+      insert_member.bindValue(":is_imprecise", m->is_imprecise);
       if (!insert_member.exec()) {
         // Failed, abort the transaction
         qCritical() << "Failed to insert layout member:"
