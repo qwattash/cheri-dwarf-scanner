@@ -378,8 +378,9 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
     bit_offset = *tag_bit_offset;
   }
 
-  m->bit_offset = bit_offset;
-  m->byte_offset += tag_offset.value_or(0);
+  unsigned long total_bit_offset = tag_offset.value_or(0) * 8 + bit_offset;
+  m->byte_offset += total_bit_offset / 8;
+  m->bit_offset = total_bit_offset % 8;
 
   m->array_items = member_desc.array_count;
 

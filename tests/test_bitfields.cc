@@ -60,8 +60,8 @@ TEST_F(TestStorage, TestExtractBitfields) {
     EXPECT_TRUE(q_bf.seek(2));
     EXPECT_EQ(q_bf.value("name").toString(), "bitfield_struct::c");
     EXPECT_EQ(q_bf.value("bit_size").toULongLong(), 24);
-    EXPECT_EQ(q_bf.value("bit_offset").toULongLong(), 8);
-    EXPECT_EQ(q_bf.value("byte_offset").toULongLong(), 0);
+    EXPECT_EQ(q_bf.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_bf.value("byte_offset").toULongLong(), 1);
   }
 
   {
@@ -85,14 +85,14 @@ TEST_F(TestStorage, TestExtractBitfields) {
     EXPECT_TRUE(q_mbf.seek(2));
     EXPECT_EQ(q_mbf.value("name").toString(), "mixed_bitfield_struct::y");
     EXPECT_EQ(q_mbf.value("bit_size").toULongLong(), 15);
-    EXPECT_EQ(q_mbf.value("bit_offset").toULongLong(), 8);
-    EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 0);
+    EXPECT_EQ(q_mbf.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 1);
 
     EXPECT_TRUE(q_mbf.seek(3));
     EXPECT_EQ(q_mbf.value("name").toString(), "mixed_bitfield_struct::z");
     EXPECT_EQ(q_mbf.value("bit_size").toULongLong(), 17);
-    EXPECT_EQ(q_mbf.value("bit_offset").toULongLong(), 32);
-    EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 0);
+    EXPECT_EQ(q_mbf.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 4);
   }
 
   {
@@ -110,7 +110,57 @@ TEST_F(TestStorage, TestExtractBitfields) {
     EXPECT_TRUE(q_abf.seek(1));
     EXPECT_EQ(q_abf.value("name").toString(), "anon_bitfield_struct::b");
     EXPECT_EQ(q_abf.value("bit_size").toULongLong(), 4);
-    EXPECT_EQ(q_abf.value("bit_offset").toULongLong(), 8);
-    EXPECT_EQ(q_abf.value("byte_offset").toULongLong(), 0);
+    EXPECT_EQ(q_abf.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_abf.value("byte_offset").toULongLong(), 1);
+  }
+
+  {
+    auto q_onbb = sm_->query("SELECT * FROM layout_member WHERE name LIKE "
+                             "'offset_not_byte_boundary::%' ORDER BY name");
+    EXPECT_FALSE(q_onbb.lastError().isValid());
+    EXPECT_EQ(selectedRows(q_onbb), 3);
+
+    EXPECT_TRUE(q_onbb.seek(0));
+    EXPECT_EQ(q_onbb.value("name").toString(), "offset_not_byte_boundary::a");
+    EXPECT_EQ(q_onbb.value("bit_size").toULongLong(), 0);
+    EXPECT_EQ(q_onbb.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_onbb.value("byte_offset").toULongLong(), 0);
+
+    EXPECT_TRUE(q_onbb.seek(1));
+    EXPECT_EQ(q_onbb.value("name").toString(), "offset_not_byte_boundary::b");
+    EXPECT_EQ(q_onbb.value("bit_size").toULongLong(), 3);
+    EXPECT_EQ(q_onbb.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_onbb.value("byte_offset").toULongLong(), 2);
+
+    EXPECT_TRUE(q_onbb.seek(2));
+    EXPECT_EQ(q_onbb.value("name").toString(), "offset_not_byte_boundary::c");
+    EXPECT_EQ(q_onbb.value("bit_size").toULongLong(), 6);
+    EXPECT_EQ(q_onbb.value("bit_offset").toULongLong(), 3);
+    EXPECT_EQ(q_onbb.value("byte_offset").toULongLong(), 2);
+  }
+
+  {
+    auto q_bb = sm_->query("SELECT * FROM layout_member WHERE name LIKE "
+                           "'boundary_bitfields::%' ORDER BY name");
+    EXPECT_FALSE(q_bb.lastError().isValid());
+    EXPECT_EQ(selectedRows(q_bb), 3);
+
+    EXPECT_TRUE(q_bb.seek(0));
+    EXPECT_EQ(q_bb.value("name").toString(), "boundary_bitfields::a");
+    EXPECT_EQ(q_bb.value("bit_size").toULongLong(), 0);
+    EXPECT_EQ(q_bb.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_bb.value("byte_offset").toULongLong(), 0);
+
+    EXPECT_TRUE(q_bb.seek(1));
+    EXPECT_EQ(q_bb.value("name").toString(), "boundary_bitfields::b");
+    EXPECT_EQ(q_bb.value("bit_size").toULongLong(), 8);
+    EXPECT_EQ(q_bb.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_bb.value("byte_offset").toULongLong(), 1);
+
+    EXPECT_TRUE(q_bb.seek(2));
+    EXPECT_EQ(q_bb.value("name").toString(), "boundary_bitfields::c");
+    EXPECT_EQ(q_bb.value("bit_size").toULongLong(), 16);
+    EXPECT_EQ(q_bb.value("bit_offset").toULongLong(), 0);
+    EXPECT_EQ(q_bb.value("byte_offset").toULongLong(), 2);
   }
 }
