@@ -100,7 +100,9 @@ struct LayoutHash {
  * In-memory representation of a flattened structure layout
  */
 struct FlattenedLayout {
-  FlattenedLayout() : line(0), size(0), die_offset(0), has_vla(false) {}
+  FlattenedLayout()
+      : line(0), size(0), die_offset(0), has_vla(false), total_padding(0),
+        has_extra_padding(false) {}
   FlattenedLayout(const TypeDesc &desc);
   LayoutId id() const { return std::make_tuple(file, line); }
 
@@ -122,6 +124,11 @@ struct FlattenedLayout {
   std::vector<std::unique_ptr<LayoutMember>> members;
   // Does the layout include a VLA?
   bool has_vla;
+
+  // Total padding in the layout
+  unsigned long long total_padding;
+  // Is there extra padding on top of alignment requirements
+  bool has_extra_padding;
 };
 
 /**
@@ -178,6 +185,11 @@ protected:
    * Insert a flattened layout into the database.
    */
   void recordLayout(std::unique_ptr<FlattenedLayout> layout);
+
+  /**
+   * Compute the padding for a flattened layout.
+   */
+  void checkPadding(FlattenedLayout &layout);
 
   /**
    * Compilation unit currently being scanned

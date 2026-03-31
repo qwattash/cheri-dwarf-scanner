@@ -163,6 +163,7 @@ void FlatLayoutScraper::endUnit(llvm::DWARFDie &unit_die) {
   for (auto i = layouts_.begin(); i != layouts_.end(); i++) {
     std::unique_ptr<FlattenedLayout> layout;
     std::swap(i->second, layout);
+    checkPadding(*layout);
     recordLayout(std::move(layout));
   }
 
@@ -470,44 +471,76 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
   }
 }
 
+void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
+  std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> occupied_bytes;
+
+  /*
+   * Note: The DWARF-4 specification asserts that the records for members
+   * in an aggregate type appear in the declaration order. This means that
+   * we can rely on the layout.members vector to be sorted by offset.
+   * Nevertheless, we double check.
+   */
+  if (layout.kind == LayoutKind::Union) {
+    uint64_t max_member_size = 0;
+    uint64_t union_align = 0;
+    for (auto &m : layout.members) {
+      if (m->depth != 0)
+        continue;
+      uint64_t member_size =
+          std::max(m->byte_size, (m->bit_offset + m->bit_size + 7) / 8);
+      max_member_size = std::max(max_member_size, member_size);
+      union_align = std::max(union_align, m->alignment);
+    }
+
+    assert(layout.size >= max_member_size &&
+           "Union size is smaller than its largest member");
+    auto end_padding = layout.size - max_member_size;
+    layout.total_padding += end_padding;
+    if (union_align && end_padding >= union_align) {
+      layout.has_extra_padding = true;
+    }
+  } else {
+    for (auto &m : layout.members) {
+      if (m->depth != 0)
+        continue;
+      auto actual_start = m->byte_offset + m->bit_offset / 8;
+      auto actual_end =
+          std::max(m->byte_offset + m->byte_size,
+                   m->byte_offset + (m->bit_offset + m->bit_size + 7) / 8);
+      occupied_bytes.emplace_back(actual_start, actual_end, m->alignment);
+    }
+
+    std::sort(occupied_bytes.begin(), occupied_bytes.end());
+
+    uint64_t struct_align = 0;
+    uint64_t last_end = 0;
+    for (auto &&[start, end, align] : occupied_bytes) {
+      if (start > last_end) {
+        auto padding = start - last_end;
+        layout.total_padding += padding;
+        if (align && padding >= align) {
+          layout.has_extra_padding = true;
+        }
+      }
+      // Ensure last_end never decreases due to overlapping members (e.g.
+      // bitfields or anonymous unions)
+      last_end = std::max(last_end, end);
+      struct_align = std::max(struct_align, align);
+    }
+
+    assert(layout.size >= last_end &&
+           "Layout size is smaller than the end of the last member");
+    auto end_padding = layout.size - last_end;
+    layout.total_padding += end_padding;
+    if (struct_align && end_padding >= struct_align) {
+      layout.has_extra_padding = true;
+    }
+  }
+}
+
 void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
   sm_.transaction([&](StorageManager &sm) {
     qDebug() << "Transaction for" << layout->name;
-
-    // Calculate padding here
-    std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> occupied_bytes;
-    uint64_t total_padding = 0;
-    bool has_extra_padding = false;
-    if (layout->kind != LayoutKind::Union) {
-      for (auto &m : layout->members) {
-        if (m->depth != 0) continue;
-        auto actual_start = m->byte_offset + m->bit_offset / 8;
-        auto actual_end = std::max(m->byte_offset + m->byte_size, m->byte_offset + (m->bit_offset + m->bit_size + 7) / 8);
-        occupied_bytes.emplace_back(actual_start, actual_end, m->alignment);
-      }
-
-      std::sort(occupied_bytes.begin(), occupied_bytes.end());
-
-      uint64_t struct_align = 0;
-      uint64_t last_end = 0;
-      for (auto&& [start, end, align] : occupied_bytes) {
-        if (start > last_end) {
-          auto padding = start - last_end;
-          total_padding += padding;
-          if (align && padding >= align) {
-            has_extra_padding = true;
-          }
-        }
-        last_end = end;
-        struct_align = std::max(struct_align, align);
-      }
-
-      auto end_padding = layout->size - last_end;
-      total_padding += end_padding;
-      if (struct_align && end_padding >= struct_align) {
-        has_extra_padding = true;
-      }
-    }
 
     // clang-format off
     auto insert_binary = sm.prepare(
@@ -577,8 +610,8 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
       insert_layout.bindValue(":is_union", 0ULL);
     }
     insert_layout.bindValue(":has_vla", layout->has_vla);
-    insert_layout.bindValue(":total_padding", (unsigned long long)total_padding);
-    insert_layout.bindValue(":has_extra_padding", (unsigned long long)has_extra_padding);
+    insert_layout.bindValue(":total_padding", layout->total_padding);
+    insert_layout.bindValue(":has_extra_padding", layout->has_extra_padding);
     if (!insert_layout.exec()) {
       // Failed, abort the transaction
       qCritical() << "Failed to insert layout:" << insert_layout.lastQuery();

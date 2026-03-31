@@ -21,3 +21,8 @@ add_executable(test_bitfields "test_bitfields.cc")
 target_link_libraries(test_bitfields dwarf_scraper_lib GTest::gtest_main)
 gtest_discover_tests(test_bitfields
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests")
+
+add_executable(test_padding "test_padding.cc")
+target_link_libraries(test_padding dwarf_scraper_lib GTest::gtest_main)
+gtest_discover_tests(test_padding
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests")
