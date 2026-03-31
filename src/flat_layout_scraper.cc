@@ -394,7 +394,6 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
   }
 
   // Determine bounds
-  // Is this really correct?
   uint64_t rlen =
       m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
   auto [base, length] = source().findRepresentableRange(m->byte_offset, rlen);
