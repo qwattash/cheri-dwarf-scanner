@@ -124,7 +124,7 @@ void FlatLayoutScraper::initSchema() {
             "base TEXT,"
             "top TEXT,"
             "required_precision INTEGER,"
-            "max_vla_size INTEGER,"
+            "max_vla_size TEXT,"
             "is_pointer INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_pointer >= 0 AND is_pointer <= 1),"
             "is_function INTEGER DEFAULT 0 NOT NULL"
@@ -473,7 +473,7 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
 void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
   sm_.transaction([&](StorageManager &sm) {
     qDebug() << "Transaction for" << layout->name;
-    
+
     // Calculate padding here
     std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> occupied_bytes;
     uint64_t total_padding = 0;
@@ -500,7 +500,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         }
         last_end = end;
         struct_align = std::max(struct_align, align);
-      } 
+      }
 
       auto end_padding = layout->size - last_end;
       total_padding += end_padding;
@@ -508,7 +508,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         has_extra_padding = true;
       }
     }
-   
+
     // clang-format off
     auto insert_binary = sm.prepare(
         "INSERT INTO binary (file) VALUES (:file)"
@@ -626,7 +626,9 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
       insert_member.bindValue(":top",  QString::fromStdString(std::to_string(m->top)));
       insert_member.bindValue(":required_precision", m->required_precision);
       if (m->max_vla_size) {
-        insert_member.bindValue(":max_vla_size", *m->max_vla_size);
+        insert_member.bindValue(
+            ":max_vla_size",
+            QString::fromStdString(std::to_string(*m->max_vla_size)));
       } else {
         insert_member.bindValue(":max_vla_size", QVariant::fromValue(nullptr));
       }

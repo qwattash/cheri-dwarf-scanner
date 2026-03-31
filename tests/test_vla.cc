@@ -25,6 +25,8 @@
  * SUCH DAMAGE.
  */
 
+#include <limits>
+
 #include "flat_layout_scraper.hh"
 #include "storage.hh"
 
@@ -50,7 +52,7 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_vla::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(), 0xfff);
   }
 
   {
@@ -64,7 +66,7 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size0_vla::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(), 0xfff);
   }
 
   {
@@ -78,7 +80,7 @@ TEST_F(TestStorage, TestExtractStructVLA) {
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "struct_with_size1_vla::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0xfff);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(), 0xfff);
   }
 
   {
@@ -109,7 +111,7 @@ TEST_F(TestStorage, TestExtractNestedVLA) {
     EXPECT_EQ(q_vla.value("name").toString(), "nested_with_vla::inner::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
     // Aligned to 0x8
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 0x1ff8);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(), 0x1ff8);
   }
 
   {
@@ -158,7 +160,8 @@ TEST_F(TestStorage, TestExtractUnionVLA) {
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 1ULL << 63);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(),
+              std::numeric_limits<uint64_t>::max());
   }
 
   {
@@ -172,7 +175,8 @@ TEST_F(TestStorage, TestExtractUnionVLA) {
     EXPECT_TRUE(q_vla.seek(1));
     EXPECT_EQ(q_vla.value("name").toString(), "union_with_vla_mix::vla");
     EXPECT_FALSE(q_vla.value("max_vla_size").isNull());
-    EXPECT_EQ(q_vla.value("max_vla_size").toULongLong(), 1ULL << 63);
+    EXPECT_EQ(q_vla.value("max_vla_size").toString().toULongLong(),
+              std::numeric_limits<uint64_t>::max());
   }
 
   {
