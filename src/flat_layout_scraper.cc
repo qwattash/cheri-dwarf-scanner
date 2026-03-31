@@ -133,7 +133,7 @@ void FlatLayoutScraper::initSchema() {
             " CHECK(is_anon >= 0 AND is_anon <= 1),"
             "is_union INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_union >= 0 AND is_union <= 1),"
-            "is_imprecise INTEGER NOT NULL"
+            "is_imprecise INTEGER DEFAULT 0 NOT NULL"
             " CHECK(is_imprecise >= 0 AND is_imprecise <= 1),"
             "FOREIGN KEY (owner) REFERENCES type_layout (id),"
             "UNIQUE(owner, name, byte_offset, bit_offset))");
