@@ -99,6 +99,8 @@ void FlatLayoutScraper::initSchema() {
             "total_padding INTEGER NOT NULL,"
             "tail_padding INTEGER DEFAULT 0 NOT NULL CHECK (tail_padding >= 0),"
             "holes INTEGER DEFAULT 0 NOT NULL CHECK (holes >= 0),"
+            "nested_padding INTEGER DEFAULT 0 NOT NULL CHECK (nested_padding >= 0),"
+            "nested_holes INTEGER DEFAULT 0 NOT NULL CHECK (nested_holes >= 0),"
             "has_extra_padding INTEGER DEFAULT 0 NOT NULL"
             " CHECK (has_extra_padding >= 0 AND has_extra_padding <= 1),"
             // Whether the type is a struct, union or not
@@ -473,7 +475,101 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
   }
 }
 
+std::pair<uint64_t, uint64_t> FlatLayoutScraper::calculateNestedPadding(
+    const std::vector<std::unique_ptr<LayoutMember>> &members, size_t &idx,
+    uint64_t current_depth) {
+  uint64_t nested_padding = 0;
+  uint64_t nested_holes = 0;
+
+  while (idx < members.size() && members[idx]->depth == current_depth) {
+    auto &m = members[idx];
+    idx++;
+
+    // If this member has children
+    if (idx < members.size() && members[idx]->depth == current_depth + 1) {
+      uint64_t struct_padding = 0;
+      uint64_t struct_holes = 0;
+
+      uint64_t size = m->byte_size;
+      uint64_t array_items = m->array_items.value_or(1);
+      if (array_items > 1) {
+        size = size / array_items;
+      }
+
+      if (m->is_union) {
+        uint64_t max_member_size = 0;
+        size_t child_idx = idx;
+        while (child_idx < members.size() &&
+               members[child_idx]->depth == current_depth + 1) {
+          auto &child = members[child_idx];
+          uint64_t member_size = std::max(
+              child->byte_size, (child->bit_offset + child->bit_size + 7) / 8);
+          max_member_size = std::max(max_member_size, member_size);
+
+          // Skip descendants of child
+          child_idx++;
+          while (child_idx < members.size() &&
+                 members[child_idx]->depth > current_depth + 1) {
+            child_idx++;
+          }
+        }
+        if (size >= max_member_size) {
+          struct_padding += size - max_member_size;
+        }
+      } else {
+        uint64_t last_end = m->byte_offset;
+        uint64_t last_start = m->byte_offset;
+        size_t child_idx = idx;
+
+        while (child_idx < members.size() &&
+               members[child_idx]->depth == current_depth + 1) {
+          auto &child = members[child_idx];
+          uint64_t start = child->byte_offset;
+          uint64_t end = child->bit_size
+                             ? (child->bit_offset + child->bit_size + 7) / 8
+                             : child->byte_size;
+          end += start;
+
+          assert(start >= last_start && "Members are not sorted by offset");
+          last_start = start;
+
+          if (start > last_end) {
+            struct_padding += start - last_end;
+            struct_holes++;
+          }
+          last_end = std::max(last_end, end);
+
+          // Skip descendants of child
+          child_idx++;
+          while (child_idx < members.size() &&
+                 members[child_idx]->depth > current_depth + 1) {
+            child_idx++;
+          }
+        }
+
+        if (m->byte_offset + size >= last_end) {
+          struct_padding += (m->byte_offset + size) - last_end;
+        }
+      }
+
+      // Recursively calculate nested padding for children
+      auto [child_nested_padding, child_nested_holes] =
+          calculateNestedPadding(members, idx, current_depth + 1);
+
+      uint64_t count = array_items > 0 ? array_items : 1;
+      nested_padding += (struct_padding + child_nested_padding) * count;
+      nested_holes += (struct_holes + child_nested_holes) * count;
+    }
+  }
+
+  return {nested_padding, nested_holes};
+}
 void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
+  size_t idx = 0;
+  auto [nested_padding, nested_holes] =
+      calculateNestedPadding(layout.members, idx, 0);
+  layout.nested_padding = nested_padding;
+  layout.nested_holes = nested_holes;
   std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> occupied_bytes;
 
   /*
@@ -561,9 +657,9 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
 
     auto insert_layout = sm.prepare(
         "INSERT INTO type_layout (binary_id, name, file, line, size, is_union, "
-        "has_vla, total_padding, tail_padding, holes, has_extra_padding) "
+        "has_vla, total_padding, tail_padding, holes, nested_padding, nested_holes, has_extra_padding) "
         "VALUES (:binary_id, :name, :file, :line, :size, :is_union, "
-        ":has_vla, :total_padding, :tail_padding, :holes, :has_extra_padding) "
+        ":has_vla, :total_padding, :tail_padding, :holes, :nested_padding, :nested_holes, :has_extra_padding) "
         "ON CONFLICT DO NOTHING RETURNING id");
 
     auto fetch_layout = sm.prepare(
@@ -623,6 +719,8 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
     insert_layout.bindValue(":total_padding", layout->total_padding);
     insert_layout.bindValue(":tail_padding", layout->tail_padding);
     insert_layout.bindValue(":holes", layout->holes);
+    insert_layout.bindValue(":nested_padding", layout->nested_padding);
+    insert_layout.bindValue(":nested_holes", layout->nested_holes);
     insert_layout.bindValue(":has_extra_padding", layout->has_extra_padding);
     if (!insert_layout.exec()) {
       // Failed, abort the transaction

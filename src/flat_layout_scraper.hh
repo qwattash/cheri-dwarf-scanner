@@ -102,7 +102,8 @@ struct LayoutHash {
 struct FlattenedLayout {
   FlattenedLayout()
       : line(0), size(0), die_offset(0), has_vla(false), total_padding(0),
-        tail_padding(0), holes(0), has_extra_padding(false) {}
+        tail_padding(0), holes(0), nested_padding(0), nested_holes(0),
+        has_extra_padding(false) {}
   FlattenedLayout(const TypeDesc &desc);
   LayoutId id() const { return std::make_tuple(file, line); }
 
@@ -131,6 +132,8 @@ struct FlattenedLayout {
   unsigned long long tail_padding;
   // Number of holes in the layout
   unsigned long long holes;
+  unsigned long long nested_padding;
+  unsigned long long nested_holes;
   // Is there extra padding on top of alignment requirements
   bool has_extra_padding;
 };
@@ -194,6 +197,9 @@ protected:
    * Compute the padding for a flattened layout.
    */
   void checkPadding(FlattenedLayout &layout);
+  std::pair<uint64_t, uint64_t> calculateNestedPadding(
+      const std::vector<std::unique_ptr<LayoutMember>> &members, size_t &idx,
+      uint64_t current_depth);
 
   /**
    * Compilation unit currently being scanned

@@ -46,6 +46,8 @@ TEST_F(TestStorage, TestPaddedStruct) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 6);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 3);
   EXPECT_EQ(q.value("holes").toULongLong(), 1);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
   EXPECT_EQ(q.value("has_extra_padding").toULongLong(), 0);
 }
 
@@ -64,6 +66,8 @@ TEST_F(TestStorage, TestPaddedUnion) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 3);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 3);
   EXPECT_EQ(q.value("holes").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
   EXPECT_EQ(q.value("has_extra_padding").toULongLong(), 0);
 }
 
@@ -83,6 +87,8 @@ TEST_F(TestStorage, TestNoPaddingStruct) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 0);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 0);
   EXPECT_EQ(q.value("holes").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
   EXPECT_EQ(q.value("has_extra_padding").toULongLong(), 0);
 }
 
@@ -102,6 +108,8 @@ TEST_F(TestStorage, TestNoPaddingUnion) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 0);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 0);
   EXPECT_EQ(q.value("holes").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
   EXPECT_EQ(q.value("has_extra_padding").toULongLong(), 0);
 }
 
@@ -121,6 +129,8 @@ TEST_F(TestStorage, TestPointerPadding) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("holes").toULongLong(), 1);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
 
 TEST_F(TestStorage, TestAlignInner) {
@@ -138,6 +148,8 @@ TEST_F(TestStorage, TestAlignInner) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("holes").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
 
 TEST_F(TestStorage, TestParentPadding) {
@@ -156,6 +168,8 @@ TEST_F(TestStorage, TestParentPadding) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("holes").toULongLong(), 1);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 15);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
 
 TEST_F(TestStorage, TestArrayOfNested) {
@@ -174,6 +188,8 @@ TEST_F(TestStorage, TestArrayOfNested) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("holes").toULongLong(), 1);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 30);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
 
 TEST_F(TestStorage, TestArrayPadding) {
@@ -191,6 +207,8 @@ TEST_F(TestStorage, TestArrayPadding) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 6);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 3);
   EXPECT_EQ(q.value("holes").toULongLong(), 1);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
 
 TEST_F(TestStorage, TestPointerUnion) {
@@ -208,4 +226,6 @@ TEST_F(TestStorage, TestPointerUnion) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("tail_padding").toULongLong(), 15);
   EXPECT_EQ(q.value("holes").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_padding").toULongLong(), 0);
+  EXPECT_EQ(q.value("nested_holes").toULongLong(), 0);
 }
