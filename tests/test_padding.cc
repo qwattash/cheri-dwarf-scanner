@@ -96,3 +96,96 @@ TEST_F(TestStorage, TestNoPaddingUnion) {
   EXPECT_EQ(q.value("total_padding").toULongLong(), 0);
   EXPECT_EQ(q.value("has_extra_padding").toULongLong(), 0);
 }
+
+TEST_F(TestStorage, TestPointerPadding) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q =
+      sm_->query("SELECT * FROM type_layout WHERE name = 'pointer_padding'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 48);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
+}
+
+TEST_F(TestStorage, TestAlignInner) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q = sm_->query("SELECT * FROM type_layout WHERE name = 'align_inner'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 32);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 15);
+}
+
+TEST_F(TestStorage, TestParentPadding) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q =
+      sm_->query("SELECT * FROM type_layout WHERE name = 'parent_padding'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 64);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
+}
+
+TEST_F(TestStorage, TestArrayOfNested) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q =
+      sm_->query("SELECT * FROM type_layout WHERE name = 'array_of_nested'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 96);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 30);
+}
+
+TEST_F(TestStorage, TestArrayPadding) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q = sm_->query("SELECT * FROM type_layout WHERE name = 'array_padding'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 20);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 6);
+}
+
+TEST_F(TestStorage, TestPointerUnion) {
+  std::filesystem::path src("assets/sample_padding");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q = sm_->query("SELECT * FROM type_layout WHERE name = 'pointer_union'");
+  EXPECT_FALSE(q.lastError().isValid());
+  EXPECT_EQ(selectedRows(q), 1);
+  EXPECT_TRUE(q.seek(0));
+  EXPECT_EQ(q.value("size").toULongLong(), 32);
+  EXPECT_EQ(q.value("total_padding").toULongLong(), 15);
+}
