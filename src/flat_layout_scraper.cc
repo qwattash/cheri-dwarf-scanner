@@ -97,6 +97,7 @@ void FlatLayoutScraper::initSchema() {
             // Size of the strucutre including any padding
             "size INTEGER NOT NULL,"
             "total_padding INTEGER NOT NULL,"
+            "holes INTEGER DEFAULT 0 NOT NULL CHECK (holes >= 0),"
             "has_extra_padding INTEGER DEFAULT 0 NOT NULL"
             " CHECK (has_extra_padding >= 0 AND has_extra_padding <= 1),"
             // Whether the type is a struct, union or not
@@ -524,6 +525,7 @@ void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
         if (align && padding >= align) {
           layout.has_extra_padding = true;
         }
+        layout.holes++;
       }
       // Ensure last_end never decreases due to overlapping members (e.g.
       // bitfields or anonymous unions)
@@ -555,8 +557,10 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         "file = :file");
 
     auto insert_layout = sm.prepare(
-        "INSERT INTO type_layout (binary_id, name, file, line, size, is_union, has_vla, total_padding, has_extra_padding) "
-        "VALUES (:binary_id, :name, :file, :line, :size, :is_union, :has_vla, :total_padding, :has_extra_padding) "
+        "INSERT INTO type_layout (binary_id, name, file, line, size, is_union, "
+        "has_vla, total_padding, holes, has_extra_padding) "
+        "VALUES (:binary_id, :name, :file, :line, :size, :is_union, "
+        ":has_vla, :total_padding, :holes, :has_extra_padding) "
         "ON CONFLICT DO NOTHING RETURNING id");
 
     auto fetch_layout = sm.prepare(
@@ -614,6 +618,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
     }
     insert_layout.bindValue(":has_vla", layout->has_vla);
     insert_layout.bindValue(":total_padding", layout->total_padding);
+    insert_layout.bindValue(":holes", layout->holes);
     insert_layout.bindValue(":has_extra_padding", layout->has_extra_padding);
     if (!insert_layout.exec()) {
       // Failed, abort the transaction

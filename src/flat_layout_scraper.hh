@@ -102,7 +102,7 @@ struct LayoutHash {
 struct FlattenedLayout {
   FlattenedLayout()
       : line(0), size(0), die_offset(0), has_vla(false), total_padding(0),
-        has_extra_padding(false) {}
+        holes(0), has_extra_padding(false) {}
   FlattenedLayout(const TypeDesc &desc);
   LayoutId id() const { return std::make_tuple(file, line); }
 
@@ -127,6 +127,8 @@ struct FlattenedLayout {
 
   // Total padding in the layout
   unsigned long long total_padding;
+  // Number of holes in the layout
+  unsigned long long holes;
   // Is there extra padding on top of alignment requirements
   bool has_extra_padding;
 };
