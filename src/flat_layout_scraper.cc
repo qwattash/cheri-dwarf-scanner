@@ -97,6 +97,7 @@ void FlatLayoutScraper::initSchema() {
             // Size of the strucutre including any padding
             "size INTEGER NOT NULL,"
             "total_padding INTEGER NOT NULL,"
+            "tail_padding INTEGER DEFAULT 0 NOT NULL CHECK (tail_padding >= 0),"
             "holes INTEGER DEFAULT 0 NOT NULL CHECK (holes >= 0),"
             "has_extra_padding INTEGER DEFAULT 0 NOT NULL"
             " CHECK (has_extra_padding >= 0 AND has_extra_padding <= 1),"
@@ -497,6 +498,7 @@ void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
            "Union size is smaller than its largest member");
     auto end_padding = layout.size - max_member_size;
     layout.total_padding += end_padding;
+    layout.tail_padding = end_padding;
     if (union_align && end_padding >= union_align) {
       layout.has_extra_padding = true;
     }
@@ -537,6 +539,7 @@ void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
            "Layout size is smaller than the end of the last member");
     auto end_padding = layout.size - last_end;
     layout.total_padding += end_padding;
+    layout.tail_padding = end_padding;
     if (struct_align && end_padding >= struct_align) {
       layout.has_extra_padding = true;
     }
@@ -558,9 +561,9 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
 
     auto insert_layout = sm.prepare(
         "INSERT INTO type_layout (binary_id, name, file, line, size, is_union, "
-        "has_vla, total_padding, holes, has_extra_padding) "
+        "has_vla, total_padding, tail_padding, holes, has_extra_padding) "
         "VALUES (:binary_id, :name, :file, :line, :size, :is_union, "
-        ":has_vla, :total_padding, :holes, :has_extra_padding) "
+        ":has_vla, :total_padding, :tail_padding, :holes, :has_extra_padding) "
         "ON CONFLICT DO NOTHING RETURNING id");
 
     auto fetch_layout = sm.prepare(
@@ -618,6 +621,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
     }
     insert_layout.bindValue(":has_vla", layout->has_vla);
     insert_layout.bindValue(":total_padding", layout->total_padding);
+    insert_layout.bindValue(":tail_padding", layout->tail_padding);
     insert_layout.bindValue(":holes", layout->holes);
     insert_layout.bindValue(":has_extra_padding", layout->has_extra_padding);
     if (!insert_layout.exec()) {
