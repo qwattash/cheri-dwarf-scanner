@@ -36,3 +36,10 @@ struct offset_not_byte_boundary onbb;
 struct boundary_bitfields bb;
 
 int main() { return 0; }
+
+struct large_bitfield_struct {
+  int a : 32;
+  int b : 16;
+};
+
+struct large_bitfield_struct lbf;

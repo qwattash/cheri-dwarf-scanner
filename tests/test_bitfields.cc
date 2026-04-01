@@ -246,3 +246,55 @@ TEST_F(TestStorage, TestBoundaryBitfields) {
   EXPECT_EQ(q_bb.value("top").toString(), "4");
   EXPECT_EQ(q_bb.value("required_precision").toULongLong(), 1);
 }
+
+TEST_F(TestStorage, TestLargeBitfieldStruct) {
+  std::filesystem::path src("assets/sample_bitfields");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q_lbf = sm_->query("SELECT * FROM layout_member WHERE name LIKE "
+                          "'large_bitfield_struct::%' ORDER BY name");
+  EXPECT_FALSE(q_lbf.lastError().isValid());
+  EXPECT_EQ(selectedRows(q_lbf), 2);
+
+  EXPECT_TRUE(q_lbf.seek(0));
+  EXPECT_EQ(q_lbf.value("name").toString(), "large_bitfield_struct::a");
+  EXPECT_EQ(q_lbf.value("bit_size").toULongLong(), 32);
+  EXPECT_EQ(q_lbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("byte_offset").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("base").toString(), "0");
+  EXPECT_EQ(q_lbf.value("top").toString(), "4");
+  EXPECT_EQ(q_lbf.value("required_precision").toULongLong(), 1);
+
+  EXPECT_TRUE(q_lbf.seek(1));
+  EXPECT_EQ(q_lbf.value("name").toString(), "large_bitfield_struct::b");
+  EXPECT_EQ(q_lbf.value("bit_size").toULongLong(), 16);
+  EXPECT_EQ(q_lbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("byte_offset").toULongLong(), 4);
+  EXPECT_EQ(q_lbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("base").toString(), "4");
+  EXPECT_EQ(q_lbf.value("top").toString(), "6");
+  EXPECT_EQ(q_lbf.value("required_precision").toULongLong(), 1);
+}
+
+TEST_F(TestStorage, TestLargeBitfieldPadding) {
+  std::filesystem::path src("assets/sample_bitfields");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q_lbf = sm_->query(
+      "SELECT * FROM type_layout WHERE name = 'large_bitfield_struct'");
+  EXPECT_FALSE(q_lbf.lastError().isValid());
+  EXPECT_EQ(selectedRows(q_lbf), 1);
+
+  EXPECT_TRUE(q_lbf.seek(0));
+  EXPECT_EQ(q_lbf.value("size").toULongLong(), 8);
+  EXPECT_EQ(q_lbf.value("total_padding").toULongLong(), 2);
+  EXPECT_EQ(q_lbf.value("tail_padding").toULongLong(), 2);
+  EXPECT_EQ(q_lbf.value("holes").toULongLong(), 0);
+}
