@@ -475,171 +475,110 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
   }
 }
 
-std::pair<uint64_t, uint64_t> FlatLayoutScraper::calculateNestedPadding(
-    const std::vector<std::unique_ptr<LayoutMember>> &members, size_t &idx,
-    uint64_t current_depth) {
-  uint64_t nested_padding = 0;
-  uint64_t nested_holes = 0;
+FlatLayoutScraper::PaddingInfo
+FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
+                                      size_t &idx, const LayoutMember *parent) {
+  PaddingInfo info;
+  uint64_t current_depth = parent ? parent->depth + 1 : 0;
+  bool is_union =
+      parent ? parent->is_union : (layout.kind == LayoutKind::Union);
+  uint64_t size = parent ? parent->byte_size : layout.size;
+  if (parent) {
+    uint64_t array_items = parent->array_items.value_or(1);
+    if (array_items > 1) {
+      size /= array_items;
+    }
+  }
+  uint64_t base_offset = parent ? parent->byte_offset : 0;
+
+  uint64_t max_member_size = 0;
+  uint64_t union_align = 0;
+  uint64_t struct_align = 0;
+  uint64_t last_end = base_offset;
+  uint64_t last_start = base_offset;
+
+  const auto &members = layout.members;
 
   while (idx < members.size() && members[idx]->depth == current_depth) {
     auto &m = members[idx];
+    uint64_t start = m->byte_offset;
+    uint64_t end =
+        m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
+    end += start;
+    uint64_t align = m->alignment;
+
+    uint64_t array_items = m->array_items.value_or(1);
+
+    const LayoutMember *current_member = m.get();
     idx++;
 
-    // If this member has children
+    // Check if this member has children
+    PaddingInfo child_info;
     if (idx < members.size() && members[idx]->depth == current_depth + 1) {
-      uint64_t struct_padding = 0;
-      uint64_t struct_holes = 0;
-
-      uint64_t size = m->byte_size;
-      uint64_t array_items = m->array_items.value_or(1);
-      if (array_items > 1) {
-        size = size / array_items;
-      }
-
-      if (m->is_union) {
-        uint64_t max_member_size = 0;
-        size_t child_idx = idx;
-        while (child_idx < members.size() &&
-               members[child_idx]->depth == current_depth + 1) {
-          auto &child = members[child_idx];
-          uint64_t member_size = std::max(
-              child->byte_size, (child->bit_offset + child->bit_size + 7) / 8);
-          max_member_size = std::max(max_member_size, member_size);
-
-          // Skip descendants of child
-          child_idx++;
-          while (child_idx < members.size() &&
-                 members[child_idx]->depth > current_depth + 1) {
-            child_idx++;
-          }
-        }
-        if (size >= max_member_size) {
-          struct_padding += size - max_member_size;
-        }
-      } else {
-        uint64_t last_end = m->byte_offset;
-        uint64_t last_start = m->byte_offset;
-        size_t child_idx = idx;
-
-        while (child_idx < members.size() &&
-               members[child_idx]->depth == current_depth + 1) {
-          auto &child = members[child_idx];
-          uint64_t start = child->byte_offset;
-          uint64_t end = child->bit_size
-                             ? (child->bit_offset + child->bit_size + 7) / 8
-                             : child->byte_size;
-          end += start;
-
-          assert(start >= last_start && "Members are not sorted by offset");
-          last_start = start;
-
-          if (start > last_end) {
-            struct_padding += start - last_end;
-            struct_holes++;
-          }
-          last_end = std::max(last_end, end);
-
-          // Skip descendants of child
-          child_idx++;
-          while (child_idx < members.size() &&
-                 members[child_idx]->depth > current_depth + 1) {
-            child_idx++;
-          }
-        }
-
-        if (m->byte_offset + size >= last_end) {
-          struct_padding += (m->byte_offset + size) - last_end;
-        }
-      }
-
-      // Recursively calculate nested padding for children
-      auto [child_nested_padding, child_nested_holes] =
-          calculateNestedPadding(members, idx, current_depth + 1);
-
-      uint64_t count = array_items > 0 ? array_items : 1;
-      nested_padding += (struct_padding + child_nested_padding) * count;
-      nested_holes += (struct_holes + child_nested_holes) * count;
-    }
-  }
-
-  return {nested_padding, nested_holes};
-}
-void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
-  size_t idx = 0;
-  auto [nested_padding, nested_holes] =
-      calculateNestedPadding(layout.members, idx, 0);
-  layout.nested_padding = nested_padding;
-  layout.nested_holes = nested_holes;
-  std::vector<std::tuple<uint64_t, uint64_t, uint64_t>> occupied_bytes;
-
-  /*
-   * Note: The DWARF-4 specification asserts that the records for members
-   * in an aggregate type appear in the declaration order. This means that
-   * we can rely on the layout.members vector to be sorted by offset.
-   * Nevertheless, we double check.
-   */
-  if (layout.kind == LayoutKind::Union) {
-    uint64_t max_member_size = 0;
-    uint64_t union_align = 0;
-    for (auto &m : layout.members) {
-      if (m->depth != 0)
-        continue;
-      uint64_t member_size =
-          std::max(m->byte_size, (m->bit_offset + m->bit_size + 7) / 8);
-      max_member_size = std::max(max_member_size, member_size);
-      union_align = std::max(union_align, m->alignment);
+      child_info = checkNestedPadding(layout, idx, current_member);
     }
 
-    assert(layout.size >= max_member_size &&
-           "Union size is smaller than its largest member");
-    auto end_padding = layout.size - max_member_size;
-    layout.total_padding += end_padding;
-    layout.tail_padding = end_padding;
-    if (union_align && end_padding >= union_align) {
-      layout.has_extra_padding = true;
-    }
-  } else {
-    uint64_t struct_align = 0;
-    uint64_t last_end = 0;
-    uint64_t last_start = 0;
+    uint64_t count = array_items > 0 ? array_items : 1;
+    info.nested_padding +=
+        (child_info.padding + child_info.nested_padding) * count;
+    info.nested_holes += (child_info.holes + child_info.nested_holes) * count;
 
-    for (auto &m : layout.members) {
-      if (m->depth != 0)
-        continue;
-
-      uint64_t start = m->byte_offset;
-      uint64_t end =
-          m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
-      end += start;
-      uint64_t align = m->alignment;
-
-      // Assert that members are sorted by offset as per DWARF specification
+    if (is_union) {
+      uint64_t m_size = std::max(
+          current_member->byte_size,
+          (current_member->bit_offset + current_member->bit_size + 7) / 8);
+      max_member_size = std::max(max_member_size, m_size);
+      union_align = std::max(union_align, align);
+    } else {
       assert(start >= last_start && "Members are not sorted by offset");
       last_start = start;
 
       if (start > last_end) {
         auto padding = start - last_end;
-        layout.total_padding += padding;
+        info.padding += padding;
         if (align && padding >= align) {
-          layout.has_extra_padding = true;
+          info.has_extra_padding = true;
         }
-        layout.holes++;
+        info.holes++;
       }
-      // Ensure last_end never decreases due to overlapping members (e.g.
-      // bitfields or anonymous unions)
       last_end = std::max(last_end, end);
       struct_align = std::max(struct_align, align);
     }
+  }
 
-    assert(layout.size >= last_end &&
-           "Layout size is smaller than the end of the last member");
-    auto end_padding = layout.size - last_end;
-    layout.total_padding += end_padding;
-    layout.tail_padding = end_padding;
-    if (struct_align && end_padding >= struct_align) {
-      layout.has_extra_padding = true;
+  if (is_union) {
+    if (size >= max_member_size) {
+      auto end_padding = size - max_member_size;
+      info.padding += end_padding;
+      info.tail_padding = end_padding;
+      if (union_align && end_padding >= union_align) {
+        info.has_extra_padding = true;
+      }
+    }
+  } else {
+    if (base_offset + size >= last_end) {
+      auto end_padding = (base_offset + size) - last_end;
+      info.padding += end_padding;
+      info.tail_padding = end_padding;
+      if (struct_align && end_padding >= struct_align) {
+        info.has_extra_padding = true;
+      }
     }
   }
+
+  return info;
+}
+
+void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
+  size_t idx = 0;
+  auto info = checkNestedPadding(layout, idx, nullptr);
+
+  layout.total_padding = info.padding;
+  layout.tail_padding = info.tail_padding;
+  layout.holes = info.holes;
+  layout.has_extra_padding = info.has_extra_padding;
+  layout.nested_padding = info.nested_padding;
+  layout.nested_holes = info.nested_holes;
 }
 
 void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {

@@ -197,9 +197,17 @@ protected:
    * Compute the padding for a flattened layout.
    */
   void checkPadding(FlattenedLayout &layout);
-  std::pair<uint64_t, uint64_t> calculateNestedPadding(
-      const std::vector<std::unique_ptr<LayoutMember>> &members, size_t &idx,
-      uint64_t current_depth);
+  struct PaddingInfo {
+    uint64_t padding = 0;
+    uint64_t holes = 0;
+    uint64_t tail_padding = 0;
+    bool has_extra_padding = false;
+    uint64_t nested_padding = 0;
+    uint64_t nested_holes = 0;
+  };
+
+  PaddingInfo checkNestedPadding(const FlattenedLayout &layout, size_t &idx,
+                                 const LayoutMember *parent);
 
   /**
    * Compilation unit currently being scanned
