@@ -500,21 +500,24 @@ void FlatLayoutScraper::checkPadding(FlattenedLayout &layout) {
       layout.has_extra_padding = true;
     }
   } else {
+    uint64_t struct_align = 0;
+    uint64_t last_end = 0;
+    uint64_t last_start = 0;
+
     for (auto &m : layout.members) {
       if (m->depth != 0)
         continue;
-      auto actual_start = m->byte_offset + m->bit_offset / 8;
-      auto actual_end =
-          std::max(m->byte_offset + m->byte_size,
-                   m->byte_offset + (m->bit_offset + m->bit_size + 7) / 8);
-      occupied_bytes.emplace_back(actual_start, actual_end, m->alignment);
-    }
 
-    std::sort(occupied_bytes.begin(), occupied_bytes.end());
+      uint64_t start = m->byte_offset;
+      uint64_t end =
+          m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
+      end += start;
+      uint64_t align = m->alignment;
 
-    uint64_t struct_align = 0;
-    uint64_t last_end = 0;
-    for (auto &&[start, end, align] : occupied_bytes) {
+      // Assert that members are sorted by offset as per DWARF specification
+      assert(start >= last_start && "Members are not sorted by offset");
+      last_start = start;
+
       if (start > last_end) {
         auto padding = start - last_end;
         layout.total_padding += padding;
