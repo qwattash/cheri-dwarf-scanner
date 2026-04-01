@@ -59,6 +59,8 @@ public:
                  token]() mutable {
       try {
         s->initSchema();
+        qInfo() << "Begin scraper" << s->name() << "job for"
+                << s->source().getPath().string();
         s->run(token);
         qInfo() << "Scraper" << s->name() << "completed job for"
                 << s->source().getPath().string();
