@@ -29,17 +29,22 @@ struct boundary_bitfields {
   int c : 16;
 };
 
-struct bitfield_struct bf;
-struct mixed_bitfield_struct mbf;
-struct anon_bitfield_struct abf;
-struct offset_not_byte_boundary onbb;
-struct boundary_bitfields bb;
-
-int main() { return 0; }
-
 struct large_bitfield_struct {
   int a : 32;
   int b : 16;
 };
 
+struct nested_bitfield_struct {
+  char a;
+  struct bitfield_struct b;
+};
+
+struct bitfield_struct bf;
+struct mixed_bitfield_struct mbf;
+struct anon_bitfield_struct abf;
+struct offset_not_byte_boundary onbb;
+struct boundary_bitfields bb;
 struct large_bitfield_struct lbf;
+struct nested_bitfield_struct nbf;
+
+int main() { return 0; }

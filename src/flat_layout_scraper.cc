@@ -348,7 +348,14 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
   }
   m->name = std::format("{}::{}", prefix, member_name);
 
-  // Relay type information into the member
+  /*
+   * Relay type information into the member
+   *
+   * Note: DW_AT_byte_size and DW_AT_bit_size attributes are specified to
+   * be mutually exclusive.
+   * Note: DW_AT_data_member_location and DW_AT_data_bit_offset are specified
+   * to be mutually exclusive.
+   */
   TypeDesc member_desc = resolveTypeDie(member_type_die);
   m->type_name = member_desc.name;
   m->byte_size = member_desc.byte_size;
@@ -363,33 +370,38 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
   auto tag_offset = getULongAttr(die, dwarf::DW_AT_data_member_location);
   auto tag_bit_offset = getULongAttr(die, dwarf::DW_AT_data_bit_offset);
   // Old-style bit offset deprecated in DWARF v5.
-  auto tag_old_bit_offset = getULongAttr(die, dwarf::DW_AT_bit_offset);
+  auto dwarf3_tag_bit_offset = getULongAttr(die, dwarf::DW_AT_bit_offset);
 
-  if (tag_bit_offset && tag_old_bit_offset) {
+  if (tag_bit_offset && dwarf3_tag_bit_offset) {
     qCritical()
         << "Can not have both DW_AT_bit_offset and DW_AT_data_bit_offset";
     throw ScraperError("Invalid member DIE");
   }
-
-  unsigned long bit_offset = 0;
-  if (tag_old_bit_offset) {
-    if (source().getContext().isLittleEndian()) {
-      auto shift = *tag_old_bit_offset + m->bit_size;
-      bit_offset = m->byte_size * 8 - shift;
-    } else {
-      bit_offset = *tag_old_bit_offset;
-    }
-  } else if (tag_bit_offset) {
-    bit_offset = *tag_bit_offset;
+  if (tag_bit_offset && tag_offset) {
+    qWarning() << "Can not have both DW_AT_data_member_location and "
+                  "DW_AT_data_bit_offset";
+    throw ScraperError("Invalid member DIE");
   }
 
-  unsigned long total_bit_offset = tag_offset.value_or(0) * 8 + bit_offset;
-  m->byte_offset += total_bit_offset / 8;
-  m->bit_offset = total_bit_offset % 8;
+  if (dwarf3_tag_bit_offset) {
+    // Convert this into the DWARF-4 equivalent representation
+    unsigned long bit_offset = 0;
+    if (source().getContext().isLittleEndian()) {
+      bit_offset = m->byte_size * 8 - (*dwarf3_tag_bit_offset + m->bit_size);
+    } else {
+      bit_offset = *dwarf3_tag_bit_offset;
+    }
+    tag_bit_offset = tag_offset.value_or(0) * 8 + bit_offset;
+    tag_offset = std::nullopt;
+  }
 
+  unsigned long bit_offset =
+      tag_offset.value_or(0) * 8 + tag_bit_offset.value_or(0);
+  m->byte_offset += bit_offset / 8;
+  m->bit_offset = bit_offset % 8;
+
+  // Propagate array information
   m->array_items = member_desc.array_count;
-
-  auto alignment = getULongAttr(die, dwarf::DW_AT_alignment).value_or(0);
 
   if (member_desc.pointer) {
     m->is_pointer = true;

@@ -298,3 +298,71 @@ TEST_F(TestStorage, TestLargeBitfieldPadding) {
   EXPECT_EQ(q_lbf.value("tail_padding").toULongLong(), 2);
   EXPECT_EQ(q_lbf.value("holes").toULongLong(), 0);
 }
+
+TEST_F(TestStorage, NestedBitfield) {
+  std::filesystem::path src("assets/sample_bitfields");
+  auto scraper = setupScraper(src);
+
+  auto result = execScraper(scraper.get());
+  EXPECT_EQ(result.errors.size(), 0);
+
+  auto q_nbf = sm_->query("SELECT * FROM layout_member WHERE name LIKE "
+                          "'nested_bitfield_struct::%' ORDER BY name");
+  EXPECT_FALSE(q_nbf.lastError().isValid());
+  EXPECT_EQ(selectedRows(q_nbf), 5);
+
+  EXPECT_TRUE(q_nbf.seek(0));
+  EXPECT_EQ(q_nbf.value("name").toString(), "nested_bitfield_struct::a");
+  EXPECT_EQ(q_nbf.value("bit_size").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_size").toULongLong(), 1);
+  EXPECT_EQ(q_nbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 1);
+  EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
+
+  EXPECT_TRUE(q_nbf.seek(1));
+  EXPECT_EQ(q_nbf.value("name").toString(), "nested_bitfield_struct::b");
+  EXPECT_EQ(q_nbf.value("bit_size").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_size").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 8);
+  EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
+
+  EXPECT_TRUE(q_nbf.seek(2));
+  EXPECT_EQ(q_nbf.value("name").toString(), "nested_bitfield_struct::b::a");
+  EXPECT_EQ(q_nbf.value("bit_size").toULongLong(), 3);
+  EXPECT_EQ(q_nbf.value("byte_size").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
+
+  EXPECT_TRUE(q_nbf.seek(3));
+  EXPECT_EQ(q_nbf.value("name").toString(), "nested_bitfield_struct::b::b");
+  EXPECT_EQ(q_nbf.value("bit_size").toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("byte_size").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("bit_offset").toULongLong(), 3);
+  EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
+
+  EXPECT_TRUE(q_nbf.seek(4));
+  EXPECT_EQ(q_nbf.value("name").toString(), "nested_bitfield_struct::b::c");
+  EXPECT_EQ(q_nbf.value("bit_size").toULongLong(), 24);
+  EXPECT_EQ(q_nbf.value("byte_size").toULongLong(), 4);
+  EXPECT_EQ(q_nbf.value("bit_offset").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
+  EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 8);
+  EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 2);
+}
