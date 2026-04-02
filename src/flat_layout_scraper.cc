@@ -450,6 +450,7 @@ std::shared_ptr<LayoutMember> FlatLayoutScraper::visitNested(
     }
   }
 
+  // Determine alignment
   auto tag_alignment = getULongAttr(die, dwarf::DW_AT_alignment);
   alignment = std::max(alignment, tag_alignment.value_or(0));
   if (auto count = m->array_items.value_or(0)) {
@@ -476,11 +477,11 @@ void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
   }
 }
 
-FlatLayoutScraper::PaddingInfo
-FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
-                                      size_t &idx, const LayoutMember *parent) {
+FlatLayoutScraper::PaddingInfo FlatLayoutScraper::checkNestedPadding(
+    const FlattenedLayout &layout, size_t &idx,
+    const std::shared_ptr<LayoutMember> parent) {
   PaddingInfo info;
-  uint64_t depth = parent ? parent->depth + 1 : 0;
+  int depth = parent ? parent->depth + 1 : 0;
   bool is_union;
   uint64_t size;
   uint64_t parent_offset;
@@ -500,82 +501,78 @@ FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
   }
 
   uint64_t max_member_size = 0;
-  uint64_t union_align = 0;
-  uint64_t struct_align = 0;
-  uint64_t last_end = parent_offset;
+  uint64_t alignment = 0;
   uint64_t last_start = parent_offset;
+  uint64_t last_end = parent_offset;
 
-  const auto &members = layout.members;
+  while (idx < layout.members.size() && layout.members[idx]->depth == depth) {
+    auto m = layout.members[idx];
 
-  while (idx < members.size() && members[idx]->depth == depth) {
-    auto &m = members[idx];
-
-    // Compute member boundary
-    uint64_t start = m->byte_offset;
-    uint64_t end =
-        m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
-    end += start;
-    uint64_t align = m->alignment;
-
-    uint64_t array_items = m->array_items.value_or(1);
-
-    const LayoutMember *current_member = m.get();
-    idx++;
-
-    // Check if this member has children
+    // Determine nested padding, if any
     PaddingInfo child_info;
-    if (idx < members.size() && members[idx]->depth == depth + 1) {
-      child_info = checkNestedPadding(layout, idx, current_member);
+    idx++;
+    if (idx < layout.members.size() &&
+        layout.members[idx]->depth == depth + 1) {
+      child_info = checkNestedPadding(layout, idx, m);
     }
-
-    uint64_t count = array_items > 0 ? array_items : 1;
+    uint64_t count = std::max(m->array_items.value_or(0), 1ULL);
     info.nested_padding +=
         (child_info.padding + child_info.nested_padding) * count;
     info.nested_holes += (child_info.holes + child_info.nested_holes) * count;
 
     if (is_union) {
-      uint64_t m_size = std::max(
-          current_member->byte_size,
-          (current_member->bit_offset + current_member->bit_size + 7) / 8);
+      // XXX just use effectiveSize
+      auto m_size =
+          std::max(static_cast<uint64_t>(m->byte_size), m->effectiveSize());
       max_member_size = std::max(max_member_size, m_size);
-      union_align = std::max(union_align, align);
     } else {
+      // Compute member boundary
+      auto [start, end] = m->effectiveRange();
       assert(start >= last_start && "Members are not sorted by offset");
       last_start = start;
 
       if (start > last_end) {
         auto padding = start - last_end;
         info.padding += padding;
-        if (align && padding >= align) {
+        if (m->alignment && padding >= m->alignment) {
           info.has_extra_padding = true;
         }
         info.holes++;
       }
       last_end = std::max(last_end, end);
-      struct_align = std::max(struct_align, align);
     }
+    alignment = std::max(alignment, m->alignment);
   }
+  assert(alignment > 0 && "Undetected alignment");
 
+  // Handle tail padding
   if (is_union) {
     if (size >= max_member_size) {
-      auto end_padding = size - max_member_size;
-      info.padding += end_padding;
-      info.tail_padding = end_padding;
-      if (union_align && end_padding >= union_align) {
+      auto tail_padding = size - max_member_size;
+      info.padding += tail_padding;
+      info.tail_padding = tail_padding;
+      if (alignment && tail_padding >= alignment) {
         info.has_extra_padding = true;
       }
     }
   } else {
     if (parent_offset + size >= last_end) {
-      auto end_padding = (parent_offset + size) - last_end;
-      info.padding += end_padding;
-      info.tail_padding = end_padding;
-      if (struct_align && end_padding >= struct_align) {
+      auto tail_padding = (parent_offset + size) - last_end;
+      info.padding += tail_padding;
+      info.tail_padding = tail_padding;
+      if (alignment && tail_padding >= alignment) {
         info.has_extra_padding = true;
       }
     }
   }
 
+  qDebug()
+      << "Padding:"
+      << std::format(
+             "{} -> {:#x} local {:#x} / tail {:#x} / nested {:#x} ALIGN {:#x}",
+             parent ? parent->name : layout.name, info.padding,
+             info.padding - info.nested_padding - info.tail_padding,
+             info.tail_padding, info.nested_padding, alignment);
   return info;
 }
 
@@ -644,7 +641,7 @@ void FlatLayoutScraper::recordLayout(std::unique_ptr<FlattenedLayout> layout) {
         throw DBError(fetch_binary.lastError());
       }
       if (!fetch_binary.first()) {
-        qCritical() << "Binary record could not be found";
+        qCritical() << "Binary record colud not be found";
         throw ScraperError("Unexpected missing binary");
       }
       binary_id = fetch_binary.value(0);

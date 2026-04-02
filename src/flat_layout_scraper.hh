@@ -49,6 +49,19 @@ struct LayoutMember {
         is_pointer(false), is_function(false), is_anon(false), is_union(false),
         is_imprecise(false), base(0), top(0), required_precision(0) {}
 
+  /**
+   * Compute the member effective start/end offsets.
+   */
+  std::pair<uint64_t, uint64_t> effectiveRange() {
+    uint64_t start = byte_offset;
+    uint64_t end = start + effectiveSize();
+
+    return {start, end};
+  }
+
+  /**
+   * Compute effective member size, depending on whether this is a bitfield.
+   */
   uint64_t effectiveSize() {
     return bit_size ? (bit_offset + bit_size + 7) / 8 : byte_size;
   }
@@ -165,6 +178,15 @@ public:
   bool visit_typedef(llvm::DWARFDie &die);
 
 protected:
+  struct PaddingInfo {
+    uint64_t padding = 0;
+    uint64_t holes = 0;
+    uint64_t tail_padding = 0;
+    bool has_extra_padding = false;
+    uint64_t nested_padding = 0;
+    uint64_t nested_holes = 0;
+  };
+
   void initSchema() override;
   void beginUnit(llvm::DWARFDie &unit_die) override;
   void endUnit(llvm::DWARFDie &unit_die) override;
@@ -204,17 +226,9 @@ protected:
    * Compute the padding for a flattened layout.
    */
   void checkPadding(FlattenedLayout &layout);
-  struct PaddingInfo {
-    uint64_t padding = 0;
-    uint64_t holes = 0;
-    uint64_t tail_padding = 0;
-    bool has_extra_padding = false;
-    uint64_t nested_padding = 0;
-    uint64_t nested_holes = 0;
-  };
 
   PaddingInfo checkNestedPadding(const FlattenedLayout &layout, size_t &idx,
-                                 const LayoutMember *parent);
+                                 const std::shared_ptr<LayoutMember> parent);
 
   /**
    * Compilation unit currently being scanned
