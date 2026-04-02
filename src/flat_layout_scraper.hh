@@ -49,6 +49,10 @@ struct LayoutMember {
         is_pointer(false), is_function(false), is_anon(false), is_union(false),
         is_imprecise(false), base(0), top(0), required_precision(0) {}
 
+  uint64_t effectiveSize() {
+    return bit_size ? (bit_offset + bit_size + 7) / 8 : byte_size;
+  }
+
   // Qualified flattened member name using :: as separator
   std::string name;
   // Name of the member type
@@ -122,7 +126,7 @@ struct FlattenedLayout {
   uint64_t die_offset;
   // Members as part of the flattened layout
   // Direct member information
-  std::vector<std::unique_ptr<LayoutMember>> members;
+  std::vector<std::shared_ptr<LayoutMember>> members;
   // Does the layout include a VLA?
   bool has_vla;
 
@@ -179,14 +183,17 @@ protected:
   /**
    * Visit a structure/union/class member DIE
    */
-  LayoutMember *visitNested(const llvm::DWARFDie &die, FlattenedLayout *layout,
-                            std::string prefix, long mindex,
-                            unsigned long offset, uint64_t depth);
+  std::shared_ptr<LayoutMember> visitNested(const llvm::DWARFDie &die,
+                                            FlattenedLayout *layout,
+                                            std::string prefix, long mindex,
+                                            unsigned long offset,
+                                            uint64_t depth);
 
   /**
    * Check whether the given member is a VLA and mark the layout accordingly.
    */
-  void checkVLAMember(FlattenedLayout *layout, LayoutMember *member);
+  void checkVLAMember(FlattenedLayout *layout,
+                      std::shared_ptr<LayoutMember> member);
 
   /**
    * Insert a flattened layout into the database.

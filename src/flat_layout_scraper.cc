@@ -298,17 +298,17 @@ FlatLayoutScraper::visitCommon(const llvm::DWARFDie &die,
 
   // Flatten the description of the type we found.
   long member_index = 0;
-  LayoutMember *last_member = nullptr;
+  std::shared_ptr<LayoutMember> m_child;
   for (auto &child : die.children()) {
     if (child.getTag() == dwarf::DW_TAG_member || child.getTag() == dwarf::DW_TAG_inheritance) {
-      last_member = visitNested(child, layout.get(), td.name, member_index++,
-                                /*offset=*/0, /*depth=*/0);
+      m_child = visitNested(child, layout.get(), td.name, member_index++,
+                            /*offset=*/0, /*depth=*/0);
       if (is_union)
-        checkVLAMember(layout.get(), last_member);
+        checkVLAMember(layout.get(), m_child);
     }
   }
   if (!is_union)
-    checkVLAMember(layout.get(), last_member);
+    checkVLAMember(layout.get(), m_child);
 
   auto [pos, inserted] =
       layouts_.emplace(std::make_pair(layout->id(), std::move(layout)));
@@ -321,10 +321,9 @@ FlatLayoutScraper::visitCommon(const llvm::DWARFDie &die,
  * Recursively scan through a structure member and attach member
  * data to the layout.
  */
-LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
-                                             FlattenedLayout *layout,
-                                             std::string prefix, long mindex,
-                                             unsigned long parent_offset, uint64_t depth) {
+std::shared_ptr<LayoutMember> FlatLayoutScraper::visitNested(
+    const llvm::DWARFDie &die, FlattenedLayout *layout, std::string prefix,
+    long mindex, unsigned long parent_offset, uint64_t depth) {
   /* Skip declarations, we don't care. */
   if (die.find(dwarf::DW_AT_declaration)) {
     return nullptr;
@@ -335,7 +334,7 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
     throw ScraperError("Not implemented");
   }
 
-  auto m = std::make_unique<LayoutMember>();
+  auto m = std::make_shared<LayoutMember>();
   auto member_type_die = die.getAttributeValueAsReferencedDie(dwarf::DW_AT_type)
                              .resolveTypeUnitReference();
 
@@ -400,7 +399,6 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
   m->byte_offset += bit_offset / 8;
   m->bit_offset = bit_offset % 8;
 
-  // Propagate array information
   m->array_items = member_desc.array_count;
 
   if (member_desc.pointer) {
@@ -411,8 +409,7 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
   }
 
   // Determine bounds
-  uint64_t rlen =
-      m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
+  uint64_t rlen = m->effectiveSize();
   auto [base, length] = source().findRepresentableRange(m->byte_offset, rlen);
   m->base = base;
   m->top = base + length;
@@ -424,56 +421,48 @@ LayoutMember *FlatLayoutScraper::visitNested(const llvm::DWARFDie &die,
            << std::format("+{:#x}:{} {} {} ({:#x}) -> [{:#x}, {:#x}] {}",
                           m->byte_offset, m->bit_offset, m->type_name, m->name,
                           rlen, m->base, m->top, m->is_imprecise ? "I" : "P");
+  layout->members.push_back(m);
 
-  // Max alignment of all members
-  uint64_t struct_alignment = 0;
-  // Keep the member pointer for later updates, maybe use shared_ptr?
-  LayoutMember *mp = m.get();
-  layout->members.emplace_back(std::move(m));
+  uint64_t alignment = 0;
   if (member_desc.decl) {
     auto decl = *member_desc.decl;
-    if (decl.kind == DeclKind::Union) {
-      mp->is_union = true;
-    }
+    bool is_union = (decl.kind == DeclKind::Union);
+    m->is_union = is_union;
 
     if (decl.kind != DeclKind::Enum) {
       // Descend into the member
       long member_index = 0;
-      LayoutMember *last_member = nullptr;
+      std::shared_ptr<LayoutMember> m_child;
       prefix += "::" + member_name;
       for (auto &child : decl.type_die.children()) {
-        if (child.getTag() == dwarf::DW_TAG_member || child.getTag() == dwarf::DW_TAG_inheritance) {
-          last_member = visitNested(child, layout, prefix, member_index++,
-                                    mp->byte_offset, depth + 1);
-          if (last_member)
-            struct_alignment = std::max(struct_alignment, last_member->alignment);
-          if (mp->is_union)
-            checkVLAMember(layout, last_member);
+        if (child.getTag() == dwarf::DW_TAG_member ||
+            child.getTag() == dwarf::DW_TAG_inheritance) {
+          m_child = visitNested(child, layout, prefix, member_index++,
+                                m->byte_offset, depth + 1);
+          if (m_child)
+            alignment = std::max(alignment, m_child->alignment);
+          if (is_union)
+            checkVLAMember(layout, m_child);
         }
       }
-      if (!mp->is_union)
-        checkVLAMember(layout, last_member);
+      if (!is_union)
+        checkVLAMember(layout, m_child);
     }
   }
 
-  if (alignment == 0) {
-    if (struct_alignment) {
-      alignment = struct_alignment;
-    } else if (member_desc.array_count && member_desc.array_count.value()) {
-      assert(member_desc.byte_size % member_desc.array_count.value() == 0);
-      alignment = member_desc.byte_size / member_desc.array_count.value();
-    } else {
-      alignment = member_desc.byte_size;
-    }
+  auto tag_alignment = getULongAttr(die, dwarf::DW_AT_alignment);
+  alignment = std::max(alignment, tag_alignment.value_or(0));
+  if (auto count = m->array_items.value_or(0)) {
+    assert(m->byte_size % count == 0);
+    alignment = m->byte_size / count;
   }
+  m->alignment = alignment ? alignment : m->byte_size;
 
-  mp->alignment = alignment;
-
-  return mp;
+  return m;
 }
 
 void FlatLayoutScraper::checkVLAMember(FlattenedLayout *layout,
-                                       LayoutMember *member) {
+                                       std::shared_ptr<LayoutMember> member) {
   if (member == nullptr)
     return;
 
@@ -491,28 +480,37 @@ FlatLayoutScraper::PaddingInfo
 FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
                                       size_t &idx, const LayoutMember *parent) {
   PaddingInfo info;
-  uint64_t current_depth = parent ? parent->depth + 1 : 0;
-  bool is_union =
-      parent ? parent->is_union : (layout.kind == LayoutKind::Union);
-  uint64_t size = parent ? parent->byte_size : layout.size;
+  uint64_t depth = parent ? parent->depth + 1 : 0;
+  bool is_union;
+  uint64_t size;
+  uint64_t parent_offset;
+
   if (parent) {
-    uint64_t array_items = parent->array_items.value_or(1);
-    if (array_items > 1) {
-      size /= array_items;
+    is_union = parent->is_union;
+    size = parent->byte_size;
+    if (parent->array_items.value_or(0) > 1) {
+      // Use single item size for padding calculation
+      size /= *parent->array_items;
     }
+    parent_offset = parent->byte_offset;
+  } else {
+    is_union = (layout.kind == LayoutKind::Union);
+    size = layout.size;
+    parent_offset = 0;
   }
-  uint64_t base_offset = parent ? parent->byte_offset : 0;
 
   uint64_t max_member_size = 0;
   uint64_t union_align = 0;
   uint64_t struct_align = 0;
-  uint64_t last_end = base_offset;
-  uint64_t last_start = base_offset;
+  uint64_t last_end = parent_offset;
+  uint64_t last_start = parent_offset;
 
   const auto &members = layout.members;
 
-  while (idx < members.size() && members[idx]->depth == current_depth) {
+  while (idx < members.size() && members[idx]->depth == depth) {
     auto &m = members[idx];
+
+    // Compute member boundary
     uint64_t start = m->byte_offset;
     uint64_t end =
         m->bit_size ? (m->bit_offset + m->bit_size + 7) / 8 : m->byte_size;
@@ -526,7 +524,7 @@ FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
 
     // Check if this member has children
     PaddingInfo child_info;
-    if (idx < members.size() && members[idx]->depth == current_depth + 1) {
+    if (idx < members.size() && members[idx]->depth == depth + 1) {
       child_info = checkNestedPadding(layout, idx, current_member);
     }
 
@@ -568,8 +566,8 @@ FlatLayoutScraper::checkNestedPadding(const FlattenedLayout &layout,
       }
     }
   } else {
-    if (base_offset + size >= last_end) {
-      auto end_padding = (base_offset + size) - last_end;
+    if (parent_offset + size >= last_end) {
+      auto end_padding = (parent_offset + size) - last_end;
       info.padding += end_padding;
       info.tail_padding = end_padding;
       if (struct_align && end_padding >= struct_align) {
