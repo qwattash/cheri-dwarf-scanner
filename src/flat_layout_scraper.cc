@@ -521,10 +521,8 @@ FlatLayoutScraper::PaddingInfo FlatLayoutScraper::checkNestedPadding(
     info.nested_holes += (child_info.holes + child_info.nested_holes) * count;
 
     if (is_union) {
-      // XXX just use effectiveSize
-      auto m_size =
-          std::max(static_cast<uint64_t>(m->byte_size), m->effectiveSize());
-      max_member_size = std::max(max_member_size, m_size);
+      max_member_size =
+          std::max(max_member_size, static_cast<uint64_t>(m->byte_size));
     } else {
       // Compute member boundary
       auto [start, end] = m->effectiveRange();
