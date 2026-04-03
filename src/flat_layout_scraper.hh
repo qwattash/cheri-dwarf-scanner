@@ -49,23 +49,6 @@ struct LayoutMember {
         is_pointer(false), is_function(false), is_anon(false), is_union(false),
         is_imprecise(false), base(0), top(0), required_precision(0) {}
 
-  /**
-   * Compute the member effective start/end offsets.
-   */
-  std::pair<uint64_t, uint64_t> effectiveRange() {
-    uint64_t start = byte_offset;
-    uint64_t end = start + effectiveSize();
-
-    return {start, end};
-  }
-
-  /**
-   * Compute effective member size, depending on whether this is a bitfield.
-   */
-  uint64_t effectiveSize() {
-    return bit_size ? (bit_offset + bit_size + 7) / 8 : byte_size;
-  }
-
   // Qualified flattened member name using :: as separator
   std::string name;
   // Name of the member type

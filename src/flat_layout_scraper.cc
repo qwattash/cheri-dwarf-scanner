@@ -422,18 +422,20 @@ std::shared_ptr<LayoutMember> FlatLayoutScraper::visitNested(
   }
 
   // Determine bounds
-  uint64_t rlen = m->effectiveSize();
-  auto [base, length] = source().findRepresentableRange(m->byte_offset, rlen);
+  auto [base, length] =
+      source().findRepresentableRange(m->byte_offset, m->byte_size);
   m->base = base;
   m->top = base + length;
-  m->required_precision = source().findRequiredPrecision(m->byte_offset, rlen);
-  m->is_imprecise = (m->byte_offset != m->base) || (length != rlen);
+  m->required_precision =
+      source().findRequiredPrecision(m->byte_offset, m->byte_size);
+  m->is_imprecise = (m->byte_offset != m->base) || (length != m->byte_size);
   m->depth = depth;
 
   qDebug() << "Traversed member"
            << std::format("+{:#x}:{} {} {} ({:#x}) -> [{:#x}, {:#x}] {}",
                           m->byte_offset, m->bit_offset, m->type_name, m->name,
-                          rlen, m->base, m->top, m->is_imprecise ? "I" : "P");
+                          m->byte_size, m->base, m->top,
+                          m->is_imprecise ? "I" : "P");
   layout->members.push_back(m);
 
   uint64_t alignment = 0;
@@ -538,12 +540,13 @@ FlatLayoutScraper::PaddingInfo FlatLayoutScraper::checkNestedPadding(
           std::max(max_member_size, static_cast<uint64_t>(m->byte_size));
     } else {
       // Compute member boundary
-      auto [start, end] = m->effectiveRange();
-      assert(start >= last_start && "Members are not sorted by offset");
-      last_start = start;
+      assert(m->byte_offset >= last_start &&
+             "Members are not sorted by offset");
+      last_start = m->byte_offset;
+      uint64_t end = m->byte_offset + m->byte_size;
 
-      if (start > last_end) {
-        auto padding = start - last_end;
+      if (m->byte_offset > last_end) {
+        auto padding = m->byte_offset - last_end;
         info.padding += padding;
         if (m->alignment && padding >= m->alignment) {
           info.has_extra_padding = true;

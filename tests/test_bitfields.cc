@@ -52,7 +52,7 @@ TEST_F(TestStorage, TestBitfieldStruct) {
   EXPECT_EQ(q_bf.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_bf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_bf.value("base").toString(), "0");
-  EXPECT_EQ(q_bf.value("top").toString(), "1");
+  EXPECT_EQ(q_bf.value("top").toString(), "4");
   EXPECT_EQ(q_bf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_bf.seek(1));
@@ -63,7 +63,7 @@ TEST_F(TestStorage, TestBitfieldStruct) {
   EXPECT_EQ(q_bf.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_bf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_bf.value("base").toString(), "0");
-  EXPECT_EQ(q_bf.value("top").toString(), "1");
+  EXPECT_EQ(q_bf.value("top").toString(), "4");
   EXPECT_EQ(q_bf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_bf.seek(2));
@@ -120,8 +120,8 @@ TEST_F(TestStorage, TestMixedBitfieldStruct) {
   EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_mbf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_mbf.value("base").toString(), "0");
-  EXPECT_EQ(q_mbf.value("top").toString(), "3");
-  EXPECT_EQ(q_mbf.value("required_precision").toULongLong(), 2);
+  EXPECT_EQ(q_mbf.value("top").toString(), "4");
+  EXPECT_EQ(q_mbf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_mbf.seek(3));
   EXPECT_EQ(q_mbf.value("name").toString(), "mixed_bitfield_struct::z");
@@ -131,8 +131,8 @@ TEST_F(TestStorage, TestMixedBitfieldStruct) {
   EXPECT_EQ(q_mbf.value("byte_offset").toULongLong(), 4);
   EXPECT_EQ(q_mbf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_mbf.value("base").toString(), "4");
-  EXPECT_EQ(q_mbf.value("top").toString(), "7");
-  EXPECT_EQ(q_mbf.value("required_precision").toULongLong(), 2);
+  EXPECT_EQ(q_mbf.value("top").toString(), "8");
+  EXPECT_EQ(q_mbf.value("required_precision").toULongLong(), 1);
 }
 
 TEST_F(TestStorage, TestAnonBitfieldStruct) {
@@ -155,7 +155,7 @@ TEST_F(TestStorage, TestAnonBitfieldStruct) {
   EXPECT_EQ(q_abf.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_abf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_abf.value("base").toString(), "0");
-  EXPECT_EQ(q_abf.value("top").toString(), "1");
+  EXPECT_EQ(q_abf.value("top").toString(), "4");
   EXPECT_EQ(q_abf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_abf.seek(1));
@@ -166,7 +166,7 @@ TEST_F(TestStorage, TestAnonBitfieldStruct) {
   EXPECT_EQ(q_abf.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_abf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_abf.value("base").toString(), "0");
-  EXPECT_EQ(q_abf.value("top").toString(), "2");
+  EXPECT_EQ(q_abf.value("top").toString(), "4");
   EXPECT_EQ(q_abf.value("required_precision").toULongLong(), 1);
 }
 
@@ -201,8 +201,8 @@ TEST_F(TestStorage, TestOffsetNotByteBoundary) {
   EXPECT_EQ(q_onbb.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_onbb.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_onbb.value("base").toString(), "0");
-  EXPECT_EQ(q_onbb.value("top").toString(), "3");
-  EXPECT_EQ(q_onbb.value("required_precision").toULongLong(), 2);
+  EXPECT_EQ(q_onbb.value("top").toString(), "4");
+  EXPECT_EQ(q_onbb.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_onbb.seek(2));
   EXPECT_EQ(q_onbb.value("name").toString(), "offset_not_byte_boundary::c");
@@ -247,7 +247,7 @@ TEST_F(TestStorage, TestBoundaryBitfields) {
   EXPECT_EQ(q_bb.value("byte_offset").toULongLong(), 0);
   EXPECT_EQ(q_bb.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_bb.value("base").toString(), "0");
-  EXPECT_EQ(q_bb.value("top").toString(), "2");
+  EXPECT_EQ(q_bb.value("top").toString(), "4");
   EXPECT_EQ(q_bb.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_bb.seek(2));
@@ -293,7 +293,7 @@ TEST_F(TestStorage, TestLargeBitfieldStruct) {
   EXPECT_EQ(q_lbf.value("byte_offset").toULongLong(), 4);
   EXPECT_EQ(q_lbf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_lbf.value("base").toString(), "4");
-  EXPECT_EQ(q_lbf.value("top").toString(), "6");
+  EXPECT_EQ(q_lbf.value("top").toString(), "8");
   EXPECT_EQ(q_lbf.value("required_precision").toULongLong(), 1);
 }
 
@@ -311,8 +311,8 @@ TEST_F(TestStorage, TestLargeBitfieldPadding) {
 
   EXPECT_TRUE(q_lbf.seek(0));
   EXPECT_EQ(q_lbf.value("size").toULongLong(), 8);
-  EXPECT_EQ(q_lbf.value("total_padding").toULongLong(), 2);
-  EXPECT_EQ(q_lbf.value("tail_padding").toULongLong(), 2);
+  EXPECT_EQ(q_lbf.value("total_padding").toULongLong(), 0);
+  EXPECT_EQ(q_lbf.value("tail_padding").toULongLong(), 0);
   EXPECT_EQ(q_lbf.value("holes").toULongLong(), 0);
 }
 
@@ -358,7 +358,7 @@ TEST_F(TestStorage, NestedBitfield) {
   EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 4);
   EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 4);
-  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 8);
   EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_nbf.seek(3));
@@ -369,7 +369,7 @@ TEST_F(TestStorage, NestedBitfield) {
   EXPECT_EQ(q_nbf.value("byte_offset").toULongLong(), 4);
   EXPECT_EQ(q_nbf.value("is_imprecise").toULongLong(), 0);
   EXPECT_EQ(q_nbf.value("base").toString().toULongLong(), 4);
-  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 5);
+  EXPECT_EQ(q_nbf.value("top").toString().toULongLong(), 8);
   EXPECT_EQ(q_nbf.value("required_precision").toULongLong(), 1);
 
   EXPECT_TRUE(q_nbf.seek(4));
