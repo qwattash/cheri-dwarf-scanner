@@ -53,9 +53,10 @@ bool db_ready = false;
 void execQuery(QSqlQuery &q) {
   qCDebug(storage) << "Executing" << q.lastQuery();
   if (!q.exec()) {
+    QSqlError err = q.lastError();
     qCritical() << "Failed to execute query" << q.lastQuery()
-                << "reason:" << q.lastError().text();
-    throw cheri::DBError(q.lastError());
+                << "reason:" << err.text();
+    throw cheri::DBError(err);
   }
 }
 
@@ -66,9 +67,10 @@ QSqlQuery execQuery(const QSqlDatabase &db, const std::string &sql_expr) {
   QSqlQuery q(db);
   qCDebug(storage) << "Executing" << sql_expr;
   if (!q.exec(QString::fromStdString(sql_expr))) {
+    QSqlError err = q.lastError();
     qCritical() << "Failed to execute query" << sql_expr
-                << "reason:" << q.lastError().text();
-    throw cheri::DBError(db.lastError());
+                << "reason:" << err.text();
+    throw cheri::DBError(err);
   }
   return q;
 }

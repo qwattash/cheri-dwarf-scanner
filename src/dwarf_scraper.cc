@@ -129,11 +129,13 @@ public:
   bool report() {
     int has_error = false;
     for (auto &fut : results_) {
-      auto result = fut.get();
-      qInfo() << result;
-      has_error = has_error || (result.errors.size() > 0);
-      for (auto &err : result.errors) {
-        qCritical() << "Reason: " << err;
+      try {
+        auto result = fut.get();
+        qInfo() << result;
+        has_error |= (result.errors.size() != 0);
+      } catch (const std::runtime_error &ex) {
+        qCritical() << "Scraper job failed:" << ex.what();
+        has_error = true;
       }
     }
     return has_error;
