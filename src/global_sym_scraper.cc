@@ -39,7 +39,7 @@ namespace cheri {
 void GlobalSymScraper::initSchema() {
   // clang-format off
   /* Initialize tables */
-  sm_.query("CREATE TABLE IF NOT EXISTS global_sym ("
+  sm_.query_tx("CREATE TABLE IF NOT EXISTS global_sym ("
             "id INTEGER PRIMARY KEY,"
             // File where the symbol is defined
             "file TEXT NOT NULL,"

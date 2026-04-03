@@ -76,14 +76,17 @@ TypeDecl::TypeDecl(const llvm::DWARFDie &die) : type_die(die), line(0) {
 
 void FlatLayoutScraper::initSchema() {
   // clang-format off
-  /* Attempt to initialize tables */
-  sm_.query("CREATE TABLE IF NOT EXISTS binary ("
+  /*
+   * Initialize tables, this must be wrapped in a transaction to avoid
+   * SQLite row locking errors.
+   */
+  sm_.query_tx("CREATE TABLE IF NOT EXISTS binary ("
             "id INTEGER PRIMARY KEY,"
             // The executable file
             "file TEXT NOT NULL,"
             "UNIQUE(file))");
 
-  sm_.query("CREATE TABLE IF NOT EXISTS type_layout ("
+  sm_.query_tx("CREATE TABLE IF NOT EXISTS type_layout ("
             "id INTEGER PRIMARY KEY,"
             // Binary ID where the struct is found
             "binary_id INTEGER NOT NULL,"
@@ -112,7 +115,7 @@ void FlatLayoutScraper::initSchema() {
             "FOREIGN KEY (binary_id) REFERENCES binary (id),"
             "UNIQUE(binary_id, name, file, line, size))");
 
-  sm_.query("CREATE TABLE IF NOT EXISTS layout_member ("
+  sm_.query_tx("CREATE TABLE IF NOT EXISTS layout_member ("
             "id INTEGER PRIMARY KEY,"
             // FK for the corresponding type_layout
             "owner INTEGER NOT NULL,"

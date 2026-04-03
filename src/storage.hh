@@ -69,6 +69,7 @@ public:
   QSqlDatabase &getWorkerStorage();
 
   QSqlQuery query(const std::string &expr);
+  QSqlQuery query_tx(const std::string &expr);
   QSqlQuery prepare(const std::string &expr);
   void transaction(std::function<void(StorageManager &sm)> fn);
 

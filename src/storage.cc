@@ -143,6 +143,14 @@ QSqlQuery StorageManager::query(const std::string &expr) {
   return execQuery(getWorkerStorage(), expr);
 }
 
+/*
+ * Same as query(), but hold the transaction lock.
+ */
+QSqlQuery StorageManager::query_tx(const std::string &expr) {
+  std::lock_guard tx_lock(transaction_mutex_);
+  return execQuery(getWorkerStorage(), expr);
+}
+
 QSqlQuery StorageManager::prepare(const std::string &expr) {
   QSqlQuery q(getWorkerStorage());
   q.prepare(QString::fromStdString(expr));
