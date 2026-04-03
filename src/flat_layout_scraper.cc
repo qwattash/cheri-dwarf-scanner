@@ -397,10 +397,20 @@ std::shared_ptr<LayoutMember> FlatLayoutScraper::visitNested(
     tag_offset = std::nullopt;
   }
 
-  unsigned long bit_offset =
-      tag_offset.value_or(0) * 8 + tag_bit_offset.value_or(0);
-  m->byte_offset += bit_offset / 8;
-  m->bit_offset = bit_offset % 8;
+  // m->byte_size is the underlying data type size, so we set the
+  // m->byte_offset to the closest boundary given bit_offset
+  // and the remaining bit_offset is considered from that alignment
+  // boundary.
+  // This means that a bitfield bounds are always approximated by
+  // [byte_offset, byte_offset + byte_size]
+  if (tag_offset) {
+    m->byte_offset += *tag_offset;
+  } else {
+    uint64_t byte_offset = (*tag_bit_offset / 8);
+    m->byte_offset += (byte_offset / m->byte_size) * m->byte_size;
+    m->bit_offset = (byte_offset % m->byte_size) * 8 + *tag_bit_offset % 8;
+    assert(m->bit_offset <= m->byte_size * 8 && "Invalid bit offset");
+  }
 
   m->array_items = member_desc.array_count;
 
